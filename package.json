@@ -1,0 +1,14 @@
+{
+  "scripts": {
+    "start": "npm run start-data",
+    "start-data": "node src/http.js -p 42751 -r /var/lib/comntr",
+    "scp-push": "scp -r src *.json root@$(cat vps/ip4):~/comntr.io/backend/",
+    "test": ""
+  },
+  "dependencies": {
+    "commander": "2.19.0",
+    "lru-cache": "5.1.1",
+    "mkdirp": "0.5.1",
+    "sha1": "1.1.1"
+  }
+}
