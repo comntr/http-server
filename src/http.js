@@ -13,7 +13,7 @@ const log = require('./log');
 const LRU_COMMENT_CACHE_SIZE = 1e5;
 const LRU_DIR_CACHE_SIZE = 100;
 const GET_COMMENTS_URL = /^\/[0-9a-f]{40}$/;
-const GET_TOPIC_STATS_URL = /^\/[0-9a-f]{40}\/(\w+)$/;
+const RPC_COMMENTS_COUNT_URL = /^\/rpc\/GetCommentsCount$$/;
 const POST_COMMENT_URL = /^\/[0-9a-f]{40}\/[0-9a-f]{40}$/;
 const CERT_DIR = '/etc/letsencrypt/archive/comntr.live/';
 const CERT_KEY_FILE = 'privkey1.pem';
@@ -43,7 +43,7 @@ function matches(value, pattern) {
 }
 
 registerHandler('GET', '/', handleGetRoot);
-registerHandler('GET', GET_TOPIC_STATS_URL, handleGetStats);
+registerHandler('POST', RPC_COMMENTS_COUNT_URL, handleGetCommentsCount);
 registerHandler('GET', GET_COMMENTS_URL, handleGetComments);
 registerHandler('POST', POST_COMMENT_URL, handleAddComment);
 log.i('All HTTP handlers registered.');
@@ -72,26 +72,25 @@ function handleGetRoot(req, res) {
   return;
 }
 
-// Returns stats for a topic.
+// Returns the number of comments in a topic.
 //
-// GET /<sha1>/size
+// POST /rpc/GetCommentsCount
+// [<sha1>, <sha1>, ...]
 // HTTP 200
-// 42
+// [34, 2, ...]
 //
-function handleGetStats(req, res) {
-  let [, topicHash, query] = req.url.split('/');
-  log.i(`Getting ${query} for ${topicHash}`);
+async function handleGetCommentsCount(req, res) {
+  let reqBody = await downloadRequestBody(req);
+  let topics = JSON.parse(reqBody);
+  log.i('Topics:', topics.length);
 
-  if (query != 'size') {
-    log.i('No such stats.');
-    res.statusCode = 400;
-    return;
-  }
+  let counts = topics.map(topicHash => {
+    let filenames = getFilenames(topicHash);
+    return filenames.length;
+  });
 
-  let filenames = getFilenames(topicHash);
   res.statusCode = 200;
-  log.i('Files:', filenames.length);
-  return filenames.length + '';
+  return JSON.stringify(counts);
 }
 
 // Returns all comments for a topic.
@@ -151,7 +150,7 @@ function handleGetComments(req, res) {
 //
 async function handleAddComment(req, res) {
   let [, topicHash, commentHash] = req.url.split('/');
-  let commentBody = await readRequestBody(req);
+  let commentBody = await downloadRequestBody(req);
 
   if (sha1(commentBody) != commentHash) {
     log.i('Actual SHA1:', sha1(commentBody));
@@ -283,7 +282,7 @@ function getTopicDir(hash) {
   return path.join(dataDir, hash);
 }
 
-function readRequestBody(req) {
+function downloadRequestBody(req) {
   let body = '';
   return new Promise(resolve => {
     req.on('data', chunk => {
