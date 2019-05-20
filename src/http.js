@@ -1,6 +1,7 @@
 const https = require('https');
 const http = require('http');
 const path = require('path');
+const zlib = require('zlib');
 const fs = require('fs');
 
 const cmdargs = require('commander');
@@ -18,6 +19,7 @@ const POST_COMMENT_URL = /^\/[0-9a-f]{40}\/[0-9a-f]{40}$/;
 const CERT_DIR = '/etc/letsencrypt/archive/comntr.live/';
 const CERT_KEY_FILE = 'privkey1.pem';
 const CERT_FILE = 'cert1.pem';
+const MIN_GZIP_RESP_SIZE = 1024; // 1 KB
 
 cmdargs
   .option('-p, --port <n>', 'HTTP port.', parseInt)
@@ -202,7 +204,15 @@ async function handleHttpRequest(req, res) {
       res.setHeader('Access-Control-Expose-Headers', 'Duration');
       if (typeof body == 'string') {
         res.setHeader('Content-Length', body.length);
-        res.write(body);
+        if (body.length < MIN_GZIP_RESP_SIZE) {
+          res.write(body);
+        } else {
+          let gziptime = Date.now();
+          let gzipped = await gzipText(body);
+          log.i('gzip time:', Date.now() - gziptime, 'ms');
+          res.setHeader('Content-Encoding', 'gzip');
+          res.write(gzipped);
+        }
       }
       log.i('HTTP', res.statusCode, 'in', diff, 'ms');
       res.end();
@@ -218,6 +228,18 @@ async function handleHttpRequest(req, res) {
     res.statusMessage = (err && err.message || '') + '';
     res.end((err && err.stack || err) + '');
   }
+}
+
+function gzipText(text) {
+  return new Promise((resolve, reject) => {
+    zlib.gzip(text, (err, buf) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(buf);
+      }
+    });
+  });
 }
 
 function validateCommentSyntax(body) {
