@@ -117,7 +117,7 @@ function handleGetComments(req, res) {
   log.i('fs.readdir:', Date.now() - time, 'ms');
 
   let time2 = Date.now();
-  let comments = {}; // comment hash -> comment data
+  let comments = [];
 
   for (let hash of filenames) {
     let text = commentsCache.get(hash);
@@ -128,18 +128,18 @@ function handleGetComments(req, res) {
       commentsCache.set(hash, text);
     }
 
-    comments[hash] = text;
+    comments.push(text);
   }
 
   log.i('fs.readFile:', Date.now() - time2, 'ms');
 
-  let time3 = Date.now();
-  let json = JSON.stringify(comments);
-  log.i('JSON.stringify:', Date.now() - time3, 'ms');
+  let boundary = sha1(new Date().toJSON()).slice(0, 7);
+  let contentType = 'multipart/mixed; boundary="' + boundary + '"';
+  let response = comments.join('\n--' + boundary + '\n');
 
   res.statusCode = 200;
-  res.setHeader('Content-Type', 'application/json');
-  return json;
+  res.setHeader('Content-Type', contentType);
+  return response;
 }
 
 // Adds a comment to a topic.
@@ -200,7 +200,10 @@ async function handleHttpRequest(req, res) {
       let diff = Date.now() - time;
       res.setHeader('Duration', diff);
       res.setHeader('Access-Control-Expose-Headers', 'Duration');
-      if (typeof body == 'string') res.write(body);
+      if (typeof body == 'string') {
+        res.setHeader('Content-Length', body.length);
+        res.write(body);
+      }
       log.i('HTTP', res.statusCode, 'in', diff, 'ms');
       res.end();
       return;
