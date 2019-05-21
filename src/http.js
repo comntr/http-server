@@ -13,9 +13,10 @@ const log = require('./log');
 
 const LRU_COMMENT_CACHE_SIZE = 1e5;
 const LRU_DIR_CACHE_SIZE = 100;
-const GET_COMMENTS_URL = /^\/[0-9a-f]{40}$/;
-const RPC_COMMENTS_COUNT_URL = /^\/rpc\/GetCommentsCount$/;
-const POST_COMMENT_URL = /^\/[0-9a-f]{40}\/[0-9a-f]{40}$/;
+const LRU_GET_CACHE_SIZE = 100;
+const URL_GET_COMMENTS = /^\/[0-9a-f]{40}$/;
+const URL_RPC_COMMENTS_COUNT = /^\/rpc\/GetCommentsCount$/;
+const URL_ADD_COMMENT = /^\/[0-9a-f]{40}\/[0-9a-f]{40}$/;
 const CERT_DIR = '/etc/letsencrypt/archive/comntr.live/';
 const CERT_KEY_FILE = 'privkey1.pem';
 const CERT_FILE = 'cert1.pem';
@@ -45,21 +46,22 @@ function matches(value, pattern) {
 }
 
 registerHandler('GET', '/', handleGetRoot);
-registerHandler('POST', RPC_COMMENTS_COUNT_URL, handleGetCommentsCount);
-registerHandler('GET', GET_COMMENTS_URL, handleGetComments);
-registerHandler('POST', POST_COMMENT_URL, handleAddComment);
+registerHandler('POST', URL_RPC_COMMENTS_COUNT, handleGetCommentsCount);
+registerHandler('GET', URL_GET_COMMENTS, handleGetComments);
+registerHandler('POST', URL_ADD_COMMENT, handleAddComment);
 log.i('All HTTP handlers registered.');
 
-let commentsCache = new LRU(LRU_COMMENT_CACHE_SIZE); // comment sha1 -> comment
-let topicsCache = new LRU(LRU_DIR_CACHE_SIZE); // topic sha1 -> comment sha1s
+let cachedComments = new LRU(LRU_COMMENT_CACHE_SIZE); // comment sha1 -> comment
+let cachedTopics = new LRU(LRU_DIR_CACHE_SIZE); // topic sha1 -> comment sha1s
+let cachedGets = new LRU(LRU_GET_CACHE_SIZE); // GET url -> rsp
 
 function getFilenames(topicId) {
-  let filenames = topicsCache.get(topicId);
+  let filenames = cachedTopics.get(topicId);
   if (filenames) return filenames;
   let topicDir = getTopicDir(topicId);
   filenames = !fs.existsSync(topicDir) ? [] :
     fs.readdirSync(topicDir);
-  topicsCache.set(topicId, filenames);
+  cachedTopics.set(topicId, filenames);
   return filenames;
 }
 
@@ -68,10 +70,8 @@ function getFilenames(topicId) {
 // GET /
 // HTTP 200
 //
-function handleGetRoot(req, res) {
-  res.statusCode = 200;
-  res.end('You have reached the comntr server.');
-  return;
+function handleGetRoot(req) {
+  return { text: 'You have reached the comntr server.' };
 }
 
 // Returns the number of comments in a topic.
@@ -81,7 +81,7 @@ function handleGetRoot(req, res) {
 // HTTP 200
 // [34, 2, ...]
 //
-async function handleGetCommentsCount(req, res) {
+async function handleGetCommentsCount(req) {
   let reqBody = await downloadRequestBody(req);
   let topics = JSON.parse(reqBody);
   log.i('Topics:', topics.length);
@@ -91,8 +91,7 @@ async function handleGetCommentsCount(req, res) {
     return filenames.length;
   });
 
-  res.statusCode = 200;
-  return JSON.stringify(counts);
+  return { json: counts };
 }
 
 // Returns all comments for a topic.
@@ -101,47 +100,45 @@ async function handleGetCommentsCount(req, res) {
 // HTTP 200
 // <json>
 //
-function handleGetComments(req, res) {
+function handleGetComments(req) {
   let topicHash = req.url.slice(1);
   let topicDir = getTopicDir(topicHash);
   log.i('Loading comments.');
 
   if (!fs.existsSync(topicDir)) {
     log.i('No such topic.');
-    res.statusCode = 200;
-    res.setHeader('Content-Type', 'application/json');
-    return '{}';
+    return { json: {} };
   }
 
   let time = Date.now();
   let filenames = getFilenames(topicHash);
-  log.i('Comments:', filenames.length);
   log.i('fs.readdir:', Date.now() - time, 'ms');
 
   let time2 = Date.now();
   let comments = [];
 
   for (let hash of filenames) {
-    let text = commentsCache.get(hash);
+    let text = cachedComments.get(hash);
 
     if (!text) {
       let filepath = path.join(topicDir, hash);
       text = fs.readFileSync(filepath, 'utf8');
-      commentsCache.set(hash, text);
+      cachedComments.set(hash, text);
     }
 
     comments.push(text);
   }
 
-  log.i('fs.readFile:', Date.now() - time2, 'ms');
+  log.i('fs.readFile x ' + filenames.length + ':', Date.now() - time2, 'ms');
 
   let boundary = sha1(new Date().toJSON()).slice(0, 7);
   let contentType = 'multipart/mixed; boundary="' + boundary + '"';
   let response = comments.join('\n--' + boundary + '\n');
 
-  res.statusCode = 200;
-  res.setHeader('Content-Type', contentType);
-  return response;
+  return {
+    body: response,
+    headers: { 'Content-Type': contentType },
+  };
 }
 
 // Adds a comment to a topic.
@@ -150,30 +147,33 @@ function handleGetComments(req, res) {
 // <text>
 // HTTP 201
 //
-async function handleAddComment(req, res) {
+async function handleAddComment(req) {
   let [, topicHash, commentHash] = req.url.split('/');
   let commentBody = await downloadRequestBody(req);
 
   if (sha1(commentBody) != commentHash) {
     log.i('Actual SHA1:', sha1(commentBody));
-    res.statusCode = 400;
-    res.statusMessage = 'Bad SHA1';
-    return;
+    return {
+      statusCode: 400,
+      statusMessage: 'Bad SHA1',
+    };
   }
 
   if (!validateCommentSyntax(commentBody)) {
-    res.statusCode = 400;
-    res.statusMessage = 'Bad Syntax';
-    return;
+    return {
+      statusCode: 400,
+      statusMessage: 'Bad Syntax',
+    };
   }
 
   let topicDir = getTopicDir(topicHash);
   let commentFilePath = getCommentFilePath(topicHash, commentHash);
 
   if (fs.existsSync(commentFilePath)) {
-    res.statusCode = 204;
-    res.statusMessage = 'Already Exists';
-    return;
+    return {
+      statusCode: 204,
+      statusMessage: 'Already Exists',
+    };
   }
 
   if (!fs.existsSync(topicDir)) {
@@ -182,51 +182,86 @@ async function handleAddComment(req, res) {
   }
 
   log.i('Adding comment /' + commentHash);
-  topicsCache.del(topicHash);
+  cachedGets.del('/' + topicHash);
+  cachedTopics.del(topicHash);
   fs.writeFileSync(commentFilePath, commentBody, 'utf8');
-  res.statusCode = 201;
-  res.statusMessage = 'Comment Added';
-  return;
+  return {
+    statusCode: 201,
+    statusMessage: 'Comment Added',
+  };
 }
 
 async function handleHttpRequest(req, res) {
+  let htime = Date.now();
   log.i(req.method, req.url);
   res.setHeader('Access-Control-Allow-Origin', '*');
 
   try {
-    for (let { method, url, handler } of handlers) {
-      if (!matches(req.method, method)) continue;
-      if (!matches(req.url, url)) continue;
-      let time = Date.now();
-      let body = await handler(req, res);
-      let diff = Date.now() - time;
-      res.setHeader('Duration', diff);
-      res.setHeader('Access-Control-Expose-Headers', 'Duration');
-      if (typeof body == 'string') {
-        res.setHeader('Content-Length', body.length);
-        if (body.length < MIN_GZIP_RESP_SIZE) {
-          res.write(body);
-        } else {
-          let gziptime = Date.now();
-          let gzipped = await gzipText(body);
-          log.i('gzip time:', Date.now() - gziptime, 'ms');
-          res.setHeader('Content-Encoding', 'gzip');
-          res.write(gzipped);
-        }
+    let rsp = null;
+
+    if (req.method == 'GET') {
+      let cached = cachedGets.get(req.url);
+      if (cached) {
+        log.i('Got cached response.');
+        rsp = cached;
       }
-      log.i('HTTP', res.statusCode, 'in', diff, 'ms');
-      res.end();
-      return;
     }
 
-    log.w('Unhandled request.');
-    res.statusCode = 400;
-    res.end();
+    if (!rsp) {
+      for (let { method, url, handler } of handlers) {
+        if (!matches(req.method, method)) continue;
+        if (!matches(req.url, url)) continue;
+        rsp = await handler(req);
+        break;
+      }
+    }
+
+    if (!rsp) {
+      rsp = {
+        statusCode: 400,
+        statusMessage: 'Unhandled request',
+      };
+    }
+
+    if (typeof rsp.body == 'string' && rsp.body.length > MIN_GZIP_RESP_SIZE) {
+      let gtime = Date.now();
+      let gzipped = await gzipText(rsp.body);
+      log.i('gzip time:', Date.now() - gtime, 'ms');
+      rsp.body = gzipped;
+      rsp.headers = {
+        ...rsp.headers,
+        'Content-Encoding': 'gzip',
+      };
+    }
+
+    if (req.method == 'GET' && URL_GET_COMMENTS.test(req.url)) {
+      cachedGets.set(req.url, rsp);
+    }
+
+    for (let name in rsp.headers || {}) {
+      res.setHeader(name, rsp.headers[name]);
+    }
+
+    if (rsp.text) {
+      res.setHeader('Content-Type', 'text/plain');
+      res.write(rsp.text);
+    } else if (rsp.json) {
+      res.setHeader('Content-Type', 'application/json');
+      res.write(JSON.stringify(rsp.json));
+    } else if (rsp.body) {
+      res.write(rsp.body);
+    }
+
+    res.statusCode = rsp.statusCode || 200;
+    res.statusMessage = rsp.statusMessage || '';
   } catch (err) {
     log.e(err);
     res.statusCode = 500;
     res.statusMessage = (err && err.message || '') + '';
-    res.end((err && err.stack || err) + '');
+    res.write((err && err.stack || err) + '');
+  } finally {
+    res.end();
+    log.i('HTTP', res.statusCode, 'in', Date.now() - htime, 'ms');
   }
 }
 
