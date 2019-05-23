@@ -15,6 +15,10 @@ log.i = (...args) => log('I', ...args);
 log.w = (...args) => log('W', ...args);
 log.e = (...args) => log('E', ...args);
 
+function p2(x) {
+  return (100 + x).toString().slice(1);
+}
+
 function dt2s(dt) {
   let s = dt / SEC % 60;
   let m = dt / MIN % 60 | 0;
@@ -24,11 +28,11 @@ function dt2s(dt) {
   let x = '';
 
   if (d > 0) {
-    x = d + ':' + h + ':' + m + ':';
+    x = p2(d) + ':' + p2(h) + ':' + p2(m) + ':';
   } else if (h > 0) {
-    x = h + ':' + m + ':';
+    x = p2(h) + ':' + p2(m) + ':';
   } else if (m > 0) {
-    x = m + ':';
+    x = p2(m) + ':';
   }
 
   return '[' + x + s.toFixed(3) + ']';
