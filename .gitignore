@@ -1,3 +1,4 @@
 node_modules/
 vps/
 package-lock.json
+npm-debug.log

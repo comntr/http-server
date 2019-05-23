@@ -1,7 +1,7 @@
 {
   "scripts": {
     "start": "npm run start-data",
-    "start-data": "node src/http.js -p 42751 -r /var/lib/comntr",
+    "start-data": "node src/http.js -p 42751 -r /var/lib/comntr -z 1024",
     "scp-push": "scp -r src *.json root@$(cat vps/ip4):~/comntr.io/backend/",
     "test": ""
   },

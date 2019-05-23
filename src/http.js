@@ -20,12 +20,19 @@ const URL_ADD_COMMENT = /^\/[0-9a-f]{40}\/[0-9a-f]{40}$/;
 const CERT_DIR = '/etc/letsencrypt/archive/comntr.live/';
 const CERT_KEY_FILE = 'privkey1.pem';
 const CERT_FILE = 'cert1.pem';
-const MIN_GZIP_RESP_SIZE = 1024; // 1 KB
 
 cmdargs
   .option('-p, --port <n>', 'HTTP port.', parseInt)
   .option('-r, --root <s>', 'Dir with the comments data.')
+  .option('-z, --gzip <n>', 'GZips responses bigger than <n> bytes.')
   .parse(process.argv);
+
+const minGZipRspSize = cmdargs.gzip;
+if (minGZipRspSize > 0) {
+  log.i('Min gzip response size:', (minGZipRspSize / 1024).toFixed(1), 'KB');
+} else {
+  log.i('GZip disabled.');
+}
 
 const dataDir = path.resolve(cmdargs.root);
 log.i('Data dir:', dataDir);
@@ -223,7 +230,10 @@ async function handleHttpRequest(req, res) {
       };
     }
 
-    if (typeof rsp.body == 'string' && rsp.body.length > MIN_GZIP_RESP_SIZE) {
+    let useGZip = typeof rsp.body == 'string' &&
+      minGZipRspSize > 0 && rsp.body.length > minGZipRspSize;
+
+    if (useGZip) {
       let gtime = Date.now();
       let gzipped = await gzipText(rsp.body);
       log.i('gzip time:', Date.now() - gtime, 'ms');
@@ -313,12 +323,13 @@ function validateCommentSyntax(body) {
 function createServer() {
   log.i('Checking the cert dir:', CERT_DIR);
   if (fs.existsSync(CERT_DIR)) {
-    log.i('Starting HTTP+SSL server on port', cmdargs.port);
+    log.i('Starting HTTPS server.');
     let key = fs.readFileSync(path.join(CERT_DIR, CERT_KEY_FILE));
     let cert = fs.readFileSync(path.join(CERT_DIR, CERT_FILE));
     return https.createServer({ key, cert }, handleHttpRequest);
   } else {
-    log.i('Starting HTTP server on port', cmdargs.port);
+    log.w('SSL certs not found.');
+    log.i('Starting HTTP server.');
     return http.createServer(handleHttpRequest);
   }
 }
@@ -329,7 +340,7 @@ server.listen(cmdargs.port, err => {
   if (err) {
     log.e(err);
   } else {
-    log.i('Server started.');
+    log.i('Listening on port', cmdargs.port);
   }
 });
 
