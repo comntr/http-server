@@ -156,7 +156,7 @@ function handleGetComments(req) {
   let clientXorHash = req.headers['if-none-match'];
 
   if (clientXorHash == serverXorHash) {
-    log.i('xorhash matched: returning a 304');
+    log.i('ETag matched:', serverXorHash);
     return {
       statusCode: 304,
       statusMessage: 'Not Modified',
@@ -195,7 +195,7 @@ function handleGetComments(req) {
   let xorhash = getTopicXorHash(topicHash);
   log.i('xorhash:', xorhash);
 
-  return {
+  let rsp = {
     body: response,
     headers: {
       'Content-Type': contentType,
@@ -203,6 +203,9 @@ function handleGetComments(req) {
       'ETag': '"' + xorhash + '"',
     },
   };
+
+  cachedGets.set(req.url, rsp);
+  return rsp;
 }
 
 // Adds a comment to a topic.
@@ -292,10 +295,6 @@ async function handleHttpRequest(req, res) {
         ...rsp.headers,
         'Content-Encoding': 'gzip',
       };
-    }
-
-    if (req.method == 'GET' && URL_GET_COMMENTS.test(req.url)) {
-      cachedGets.set(req.url, rsp);
     }
 
     for (let name in rsp.headers || {}) {
