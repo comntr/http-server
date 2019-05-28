@@ -5,16 +5,12 @@ const fs = require('fs');
 
 const cmdargs = require('commander');
 const mkdirp = require('mkdirp');
-const sha1 = require('sha1');
-const LRU = require('lru-cache');
 
+const BadRequest = require('./bad-request');
 const log = require('./log');
 
-const LRU_COMMENT_CACHE_SIZE = 1e5;
-const LRU_DIR_CACHE_SIZE = 100;
-const GET_COMMENTS_URL = /^\/[0-9a-f]{40}$/;
-const GET_TOPIC_STATS_URL = /^\/[0-9a-f]{40}\/(\w+)$/;
-const POST_COMMENT_URL = /^\/[0-9a-f]{40}\/[0-9a-f]{40}$/;
+const RPC_CALL_URL = /^\/rpc\/(\w+)$/;
+const RPC_RES_SAMPLE_LEN = 40;
 const CERT_DIR = '/etc/letsencrypt/archive/comntr.live/';
 const CERT_KEY_FILE = 'privkey1.pem';
 const CERT_FILE = 'cert1.pem';
@@ -29,10 +25,10 @@ log.i('Data dir:', dataDir);
 if (!fs.existsSync(dataDir))
   mkdirp.sync(dataDir);
 
-let handlers = [];
+let httpHandlers = [];
 
 function registerHandler(method, url, handler) {
-  handlers.push({ method, url, handler });
+  httpHandlers.push({ method, url, handler });
   log.i('Registered handler:', method, url);
 }
 
@@ -43,149 +39,48 @@ function matches(value, pattern) {
 }
 
 registerHandler('GET', '/', handleGetRoot);
-registerHandler('GET', GET_TOPIC_STATS_URL, handleGetStats);
-registerHandler('GET', GET_COMMENTS_URL, handleGetComments);
-registerHandler('POST', POST_COMMENT_URL, handleAddComment);
-log.i('All HTTP handlers registered.');
+registerHandler('POST', RPC_CALL_URL, handleRpcCall);
+log.i('HTTP handlers registered.');
 
-let commentsCache = new LRU(LRU_COMMENT_CACHE_SIZE); // comment sha1 -> comment
-let topicsCache = new LRU(LRU_DIR_CACHE_SIZE); // topic sha1 -> comment sha1s
+const rpcHandlers = {}; // rpc name -> rpc handler
 
-function getFilenames(topicId) {
-  let filenames = topicsCache.get(topicId);
-  if (filenames) return filenames;
-  let topicDir = getTopicDir(topicId);
-  filenames = !fs.existsSync(topicDir) ? [] :
-    fs.readdirSync(topicDir);
-  topicsCache.set(topicId, filenames);
-  return filenames;
-}
+rpcHandlers.GetSize = require('./rpc/get-size');
+rpcHandlers.AddComment = require('./rpc/add-comment');
+rpcHandlers.GetComments = require('./rpc/get-comments');
 
-// Returns a dummy message to see that the server is alive.
-//
-// GET /
-// HTTP 200
-//
+log.i('RPC handlers registered:', ['', ...Object.keys(rpcHandlers)].join('\n  '));
+
 function handleGetRoot(req, res) {
   res.statusCode = 200;
   res.end('You have reached the comntr server.');
   return;
 }
 
-// Returns stats for a topic.
-//
-// GET /<sha1>/size
-// HTTP 200
-// 42
-//
-function handleGetStats(req, res) {
-  let [, topicHash, query] = req.url.split('/');
-  log.i(`Getting ${query} for ${topicHash}`);
-
-  if (query != 'size') {
-    log.i('No such stats.');
-    res.statusCode = 400;
-    return;
-  }
-
-  let filenames = getFilenames(topicHash);
-  res.statusCode = 200;
-  log.i('Files:', filenames.length);
-  return filenames.length + '';
-}
-
-// Returns all comments for a topic.
-//
-// GET /<sha1>
-// HTTP 200
-// <json>
-//
-function handleGetComments(req, res) {
-  let topicHash = req.url.slice(1);
-  let topicDir = getTopicDir(topicHash);
-  log.i('Loading comments.');
-
-  if (!fs.existsSync(topicDir)) {
-    log.i('No such topic.');
-    res.statusCode = 200;
-    res.setHeader('Content-Type', 'application/json');
-    return '{}';
-  }
-
+async function handleRpcCall(req, res) {
+  let [, rpcName] = RPC_CALL_URL.exec(req.url);
+  log.i('rpc.' + rpcName);
   let time = Date.now();
-  let filenames = getFilenames(topicHash);
-  log.i('Comments:', filenames.length);
-  log.i('fs.readdir:', Date.now() - time, 'ms');
-
-  let time2 = Date.now();
-  let comments = {}; // comment hash -> comment data
-
-  for (let hash of filenames) {
-    let text = commentsCache.get(hash);
-
-    if (!text) {
-      let filepath = path.join(topicDir, hash);
-      text = fs.readFileSync(filepath, 'utf8');
-      commentsCache.set(hash, text);
+  try {
+    let handler = rpcHandlers[rpcName];
+    if (!handler) throw new Error('No such RPC.');
+    let rpcBody = await readRequestBody(req);
+    let rpcArgs = JSON.parse(rpcBody);
+    if (!Array.isArray(rpcArgs)) throw new Error('RPC args must be an array.');
+    let rpcRes = await handler(...rpcArgs);
+    res.setHeader('Content-Type', 'application/json');
+    let json = JSON.stringify(rpcRes);
+    log.i('rpc.' + rpcName, Date.now() - time, 'ms', json.slice(0, RPC_RES_SAMPLE_LEN));
+    return json;
+  } catch (err) {
+    log.e('rpc.' + rpcName, Date.now() - time, 'ms', err);
+    if (err instanceof BadRequest) {
+      res.statusCode = 400;
+      res.statusMessage = err.status;
+      res.write(err.details);
+    } else {
+      throw err;
     }
-
-    comments[hash] = text;
   }
-
-  log.i('fs.readFile:', Date.now() - time2, 'ms');
-
-  let time3 = Date.now();
-  let json = JSON.stringify(comments);
-  log.i('JSON.stringify:', Date.now() - time3, 'ms');
-
-  res.statusCode = 200;
-  res.setHeader('Content-Type', 'application/json');
-  return json;
-}
-
-// Adds a comment to a topic.
-//
-// POST /<topic-sha1>/<comment-sha1>
-// <text>
-// HTTP 201
-//
-async function handleAddComment(req, res) {
-  let [, topicHash, commentHash] = req.url.split('/');
-  let commentBody = await readRequestBody(req);
-
-  if (sha1(commentBody) != commentHash) {
-    log.i('Actual SHA1:', sha1(commentBody));
-    res.statusCode = 400;
-    res.statusMessage = 'Bad SHA1';
-    return;
-  }
-
-  if (!validateCommentSyntax(commentBody)) {
-    res.statusCode = 400;
-    res.statusMessage = 'Bad Syntax';
-    return;
-  }
-
-  let topicDir = getTopicDir(topicHash);
-  let commentFilePath = getCommentFilePath(topicHash, commentHash);
-
-  if (fs.existsSync(commentFilePath)) {
-    res.statusCode = 204;
-    res.statusMessage = 'Already Exists';
-    return;
-  }
-
-  if (!fs.existsSync(topicDir)) {
-    log.i('+ topic /' + topicHash);
-    fs.mkdirSync(topicDir);
-  }
-
-  log.i('Adding comment /' + commentHash);
-  topicsCache.del(topicHash);
-  fs.writeFileSync(commentFilePath, commentBody, 'utf8');
-  res.statusCode = 201;
-  res.statusMessage = 'Comment Added';
-  return;
 }
 
 async function handleHttpRequest(req, res) {
@@ -193,7 +88,7 @@ async function handleHttpRequest(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
 
   try {
-    for (let { method, url, handler } of handlers) {
+    for (let { method, url, handler } of httpHandlers) {
       if (!matches(req.method, method)) continue;
       if (!matches(req.url, url)) continue;
       let time = Date.now();
@@ -209,57 +104,25 @@ async function handleHttpRequest(req, res) {
 
     log.w('Unhandled request.');
     res.statusCode = 400;
+    res.statusMessage = 'Unrecognized HTTP Request';
     res.end();
   } catch (err) {
     log.e(err);
     res.statusCode = 500;
-    res.statusMessage = (err && err.message || '') + '';
-    res.end((err && err.stack || err) + '');
+    res.statusMessage = err.message;
+    res.end();
   }
-}
-
-function validateCommentSyntax(body) {
-  let sep = body.indexOf('\n\n');
-
-  if (sep < 0) {
-    log.v('No \\n\\n separator.');
-    return false;
-  }
-
-  let hdrs = body.slice(0, sep);
-  let text = body.slice(sep + 2);
-
-  // log.v('Headers:', JSON.stringify(hdrs));
-  // log.v('Comment text:', JSON.stringify(text));
-
-  if (!hdrs || !text) {
-    log.v('Missing headers or comment text.');
-    return false;
-  }
-
-  for (let header of hdrs.split('\n'))
-    if (!/^\w+: \S+$/.test(header)) {
-      log.v('Bad header:', header);
-      return false;
-    }
-
-  if (!/^\S[^\x00]+\S$/.test(text)) {
-    log.v('Bad comment text.');
-    return false;
-  }
-
-  return true;
 }
 
 function createServer() {
   log.i('Checking the cert dir:', CERT_DIR);
   if (fs.existsSync(CERT_DIR)) {
-    log.i('Starting HTTP+SSL server on port', cmdargs.port);
+    log.i('Starting HTTPS server on port', cmdargs.port);
     let key = fs.readFileSync(path.join(CERT_DIR, CERT_KEY_FILE));
     let cert = fs.readFileSync(path.join(CERT_DIR, CERT_FILE));
     return https.createServer({ key, cert }, handleHttpRequest);
   } else {
-    log.i('Starting HTTP server on port', cmdargs.port);
+    log.w('No cert found. Starting HTTP server on port', cmdargs.port);
     return http.createServer(handleHttpRequest);
   }
 }
@@ -273,15 +136,6 @@ server.listen(cmdargs.port, err => {
     log.i('Server started.');
   }
 });
-
-function getCommentFilePath(topicHash, commentHash) {
-  let topicDir = getTopicDir(topicHash);
-  return path.join(topicDir, commentHash);
-}
-
-function getTopicDir(hash) {
-  return path.join(dataDir, hash);
-}
 
 function readRequestBody(req) {
   let body = '';
