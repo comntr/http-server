@@ -10,6 +10,7 @@ const sha1 = require('sha1');
 const LRU = require('lru-cache');
 
 const log = require('./log');
+const hashutil = require('./hash-util');
 
 const LRU_COMMENT_CACHE_SIZE = 1e5;
 const LRU_DIR_CACHE_SIZE = 100;
@@ -56,10 +57,12 @@ registerHandler('GET', '/', handleGetRoot);
 registerHandler('POST', URL_RPC_COMMENTS_COUNT, handleGetCommentsCount);
 registerHandler('GET', URL_GET_COMMENTS, handleGetComments);
 registerHandler('POST', URL_ADD_COMMENT, handleAddComment);
+registerHandler('OPTIONS', /^\/.*$/, handleCorsPreflight);
 log.i('All HTTP handlers registered.');
 
 let cachedComments = new LRU(LRU_COMMENT_CACHE_SIZE); // comment sha1 -> comment
 let cachedTopics = new LRU(LRU_DIR_CACHE_SIZE); // topic sha1 -> comment sha1s
+let cachedXorHashes = new LRU(LRU_DIR_CACHE_SIZE); // topic sha1 -> xor of comment sha1s
 let cachedGets = new LRU(LRU_GET_CACHE_SIZE); // GET url -> rsp
 
 function getFilenames(topicId) {
@@ -72,6 +75,18 @@ function getFilenames(topicId) {
   return filenames;
 }
 
+function getTopicXorHash(topicId) {
+  let xorhash = cachedXorHashes.get(topicId);
+  if (!xorhash) {
+    let filenames = getFilenames(topicId);
+    let binhashes = filenames.map(hashutil.hex2bin);
+    let binxorhash = hashutil.xorall(binhashes);
+    xorhash = hashutil.bin2hex(binxorhash);
+  }
+  cachedXorHashes.set(topicId, xorhash);
+  return xorhash;
+}
+
 // Returns a dummy message to see that the server is alive.
 //
 // GET /
@@ -79,6 +94,21 @@ function getFilenames(topicId) {
 //
 function handleGetRoot(req) {
   return { text: 'You have reached the comntr server.' };
+}
+
+// Handles the CORS preflight request.
+//
+// OPTIONS /<sha1>/...
+// HTTP 200
+//
+function handleCorsPreflight(req) {
+  return {
+    headers: {
+      'Access-Control-Max-Age': '86400',
+      'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE',
+      'Access-Control-Allow-Headers': 'If-None-Match',
+    }
+  };
 }
 
 // Returns the number of comments in a topic.
@@ -121,6 +151,20 @@ function handleGetComments(req) {
   let filenames = getFilenames(topicHash);
   log.i('fs.readdir:', Date.now() - time, 'ms');
 
+  let time3 = Date.now();
+  let serverXorHash = getTopicXorHash(topicHash);
+  let clientXorHash = req.headers['if-none-match'];
+
+  if (clientXorHash == serverXorHash) {
+    log.i('xorhash matched: returning a 304');
+    return {
+      statusCode: 304,
+      statusMessage: 'Not Modified',
+    };
+  }
+
+  log.i('ETag time:', Date.now() - time3, 'ms');
+
   let time2 = Date.now();
   let comments = [];
 
@@ -138,13 +182,20 @@ function handleGetComments(req) {
 
   log.i('fs.readFile x ' + filenames.length + ':', Date.now() - time2, 'ms');
 
+
   let boundary = sha1(new Date().toJSON()).slice(0, 7);
   let contentType = 'multipart/mixed; boundary="' + boundary + '"';
   let response = comments.join('\n--' + boundary + '\n');
+  let xorhash = getTopicXorHash(topicHash);
+  log.i('xorhash:', xorhash);
 
   return {
     body: response,
-    headers: { 'Content-Type': contentType },
+    headers: {
+      'Content-Type': contentType,
+      'Cache-Control': 'no-cache',
+      'ETag': '"' + xorhash + '"',
+    },
   };
 }
 
@@ -191,6 +242,7 @@ async function handleAddComment(req) {
   log.i('Adding comment /' + commentHash);
   cachedGets.del('/' + topicHash);
   cachedTopics.del(topicHash);
+  cachedXorHashes.del(topicHash);
   fs.writeFileSync(commentFilePath, commentBody, 'utf8');
   return {
     statusCode: 201,
