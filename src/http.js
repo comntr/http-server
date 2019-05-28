@@ -165,6 +165,12 @@ function handleGetComments(req) {
 
   log.i('ETag time:', Date.now() - time3, 'ms');
 
+  let cached = cachedGets.get(req.url);
+  if (cached) {
+    log.i('Got cached response.');
+    return cached;
+  }
+
   let time2 = Date.now();
   let comments = [];
 
@@ -257,14 +263,6 @@ async function handleHttpRequest(req, res) {
 
   try {
     let rsp = null;
-
-    if (req.method == 'GET') {
-      let cached = cachedGets.get(req.url);
-      if (cached) {
-        log.i('Got cached response.');
-        rsp = cached;
-      }
-    }
 
     if (!rsp) {
       for (let { method, url, handler } of handlers) {
