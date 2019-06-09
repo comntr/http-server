@@ -5,7 +5,7 @@ const DAY = 24 * HOUR;
 
 const T_BASE = Date.now();
 
-function log(...args) {
+export function log(...args) {
   let ts = dt2s(Date.now() - T_BASE);
   console.log(ts, ...args);
 }
@@ -39,5 +39,3 @@ function dt2s(dt) {
 }
 
 log('Started:', new Date().toISOString());
-
-module.exports = log;

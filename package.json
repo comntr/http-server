@@ -1,14 +1,17 @@
 {
   "scripts": {
-    "start": "npm run start-data",
-    "start-data": "node src/http.js -p 42751 -r /var/lib/comntr -z 1024",
-    "scp-push": "scp -r src *.json root@$(cat vps/ip4):~/comntr.io/backend/",
-    "test": ""
+    "start": "npm i; npm run clean; npm run build; npm run http",
+    "clean": "rm -rf ./bin",
+    "build": "npm i; node_modules/.bin/tsc",
+    "http": "node bin/http -p 42751 -r /var/lib/comntr -z 1024",
+    "scp-push": "scp -r src *.json root@$(cat vps/ip4):~/comntr.io/backend/"
   },
   "dependencies": {
+    "@types/node": "^12.0.7",
     "commander": "2.19.0",
     "lru-cache": "5.1.1",
     "mkdirp": "0.5.1",
-    "sha1": "1.1.1"
+    "sha1": "1.1.1",
+    "typescript": "3.5.1"
   }
 }

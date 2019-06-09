@@ -1,16 +1,16 @@
-const https = require('https');
-const http = require('http');
-const path = require('path');
-const zlib = require('zlib');
-const fs = require('fs');
+import * as https from 'https';
+import * as http from 'http';
+import * as path from 'path';
+import * as zlib from 'zlib';
+import * as fs from 'fs';
 
-const cmdargs = require('commander');
-const mkdirp = require('mkdirp');
-const sha1 = require('sha1');
-const LRU = require('lru-cache');
+import * as cmdargs from 'commander';
+import * as mkdirp from 'mkdirp';
+import * as sha1 from 'sha1';
+import * as LRU from 'lru-cache';
 
-const log = require('./log');
-const hashutil = require('./hash-util');
+import { log } from './log';
+import * as hashutil from './hash-util';
 
 const LRU_COMMENT_CACHE_SIZE = 1e5;
 const LRU_DIR_CACHE_SIZE = 100;
@@ -384,14 +384,9 @@ function createServer() {
 }
 
 let server = createServer();
-
-server.listen(cmdargs.port, err => {
-  if (err) {
-    log.e(err);
-  } else {
-    log.i('Listening on port', cmdargs.port);
-  }
-});
+server.listen(cmdargs.port);
+server.on('error', err => log.e(err));
+server.on('listening', () => log.i('Listening on port', cmdargs.port));
 
 function getCommentFilePath(topicHash, commentHash) {
   let topicDir = getTopicDir(topicHash);
@@ -404,7 +399,7 @@ function getTopicDir(hash) {
 
 function downloadRequestBody(req) {
   let body = '';
-  return new Promise(resolve => {
+  return new Promise<string>(resolve => {
     req.on('data', chunk => {
       body += chunk.toString();
     });

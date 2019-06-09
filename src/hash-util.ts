@@ -1,4 +1,4 @@
-function hex2bin(hs) {
+export function hex2bin(hs) {
   let a = new Uint8Array(hs.length / 2);
   for (let i = 0; i < a.length; i++) {
     let si = hs.slice(i * 2, i * 2 + 2);
@@ -7,15 +7,15 @@ function hex2bin(hs) {
   return a;
 }
 
-function hd2s(x) {
+export function hd2s(x) {
   return (0x100 + x).toString(16).slice(1);
 }
 
-function bin2hex(a) {
+export function bin2hex(a) {
   return [...a].map(hd2s).join('');
 }
 
-function xorall(list) {
+export function xorall(list) {
   if (list.length < 1) return null;
   let a = list[0].map(x => x);
   for (let i = 1; i < list.length; i++)
@@ -23,9 +23,3 @@ function xorall(list) {
       a[j] ^= list[i][j];
   return a;
 }
-
-module.exports = {
-  xorall,
-  bin2hex,
-  hex2bin,
-};
