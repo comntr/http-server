@@ -60,10 +60,18 @@ registerHandler('POST', URL_ADD_COMMENT, handleAddComment);
 registerHandler('OPTIONS', /^\/.*$/, handleCorsPreflight);
 log.i('All HTTP handlers registered.');
 
-let cachedComments = new LRU(LRU_COMMENT_CACHE_SIZE); // comment sha1 -> comment
-let cachedTopics = new LRU(LRU_DIR_CACHE_SIZE); // topic sha1 -> comment sha1s
-let cachedXorHashes = new LRU(LRU_DIR_CACHE_SIZE); // topic sha1 -> xor of comment sha1s
-let cachedGets = new LRU(LRU_GET_CACHE_SIZE); // GET url -> rsp
+interface Rsp {
+  statusCode?: number;
+  statusMessage?: string;
+  headers?: any;
+  text?: string;
+  json?: any;
+}
+
+let cachedComments = new LRU<string, string>(LRU_COMMENT_CACHE_SIZE); // comment sha1 -> comment
+let cachedTopics = new LRU<string, string[]>(LRU_DIR_CACHE_SIZE); // topic sha1 -> comment sha1s
+let cachedXorHashes = new LRU<string, string>(LRU_DIR_CACHE_SIZE); // topic sha1 -> xor of comment sha1s
+let cachedGets = new LRU<string, Rsp>(LRU_GET_CACHE_SIZE); // GET url -> rsp
 
 function getFilenames(topicId) {
   let filenames = cachedTopics.get(topicId);
@@ -92,7 +100,7 @@ function getTopicXorHash(topicId) {
 // GET /
 // HTTP 200
 //
-function handleGetRoot(req) {
+function handleGetRoot(req: http.IncomingMessage): Rsp {
   return { text: 'You have reached the comntr server.' };
 }
 
@@ -101,7 +109,7 @@ function handleGetRoot(req) {
 // OPTIONS /<sha1>/...
 // HTTP 200
 //
-function handleCorsPreflight(req) {
+function handleCorsPreflight(req: http.IncomingMessage): Rsp {
   return {
     headers: {
       'Access-Control-Max-Age': '86400',
@@ -118,7 +126,7 @@ function handleCorsPreflight(req) {
 // HTTP 200
 // [34, 2, ...]
 //
-async function handleGetCommentsCount(req) {
+async function handleGetCommentsCount(req: http.IncomingMessage): Promise<Rsp> {
   let reqBody = await downloadRequestBody(req);
   let topics = JSON.parse(reqBody);
   log.i('Topics:', topics.length);
@@ -137,7 +145,7 @@ async function handleGetCommentsCount(req) {
 // HTTP 200
 // <json>
 //
-function handleGetComments(req) {
+function handleGetComments(req: http.IncomingMessage): Rsp {
   let topicHash = req.url.slice(1);
   let topicDir = getTopicDir(topicHash);
   log.i('Loading comments.');
@@ -214,7 +222,7 @@ function handleGetComments(req) {
 // <text>
 // HTTP 201
 //
-async function handleAddComment(req) {
+async function handleAddComment(req: http.IncomingMessage): Promise<Rsp> {
   let [, topicHash, commentHash] = req.url.split('/');
   let commentBody = await downloadRequestBody(req);
 
@@ -259,7 +267,7 @@ async function handleAddComment(req) {
   };
 }
 
-async function handleHttpRequest(req, res) {
+async function handleHttpRequest(req: http.IncomingMessage, res: http.ServerResponse) {
   let htime = Date.now();
   log.i(req.method, req.url);
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -324,8 +332,8 @@ async function handleHttpRequest(req, res) {
   }
 }
 
-function gzipText(text) {
-  return new Promise((resolve, reject) => {
+function gzipText(text: string) {
+  return new Promise<Buffer>((resolve, reject) => {
     zlib.gzip(text, (err, buf) => {
       if (err) {
         reject(err);
@@ -336,7 +344,7 @@ function gzipText(text) {
   });
 }
 
-function validateCommentSyntax(body) {
+function validateCommentSyntax(body: string) {
   let sep = body.indexOf('\n\n');
 
   if (sep < 0) {
@@ -388,16 +396,16 @@ server.listen(cmdargs.port);
 server.on('error', err => log.e(err));
 server.on('listening', () => log.i('Listening on port', cmdargs.port));
 
-function getCommentFilePath(topicHash, commentHash) {
+function getCommentFilePath(topicHash: string, commentHash: string) {
   let topicDir = getTopicDir(topicHash);
   return path.join(topicDir, commentHash);
 }
 
-function getTopicDir(hash) {
+function getTopicDir(hash: string) {
   return path.join(dataDir, hash);
 }
 
-function downloadRequestBody(req) {
+function downloadRequestBody(req: http.IncomingMessage) {
   let body = '';
   return new Promise<string>(resolve => {
     req.on('data', chunk => {

@@ -7,6 +7,8 @@
     "scp-push": "scp -r src *.json root@$(cat vps/ip4):~/comntr.io/backend/"
   },
   "dependencies": {
+    "@types/lru-cache": "^5.1.0",
+    "@types/mkdirp": "^0.5.2",
     "@types/node": "^12.0.7",
     "commander": "2.19.0",
     "lru-cache": "5.1.1",
