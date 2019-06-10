@@ -22,6 +22,8 @@ const CERT_DIR = '/etc/letsencrypt/archive/comntr.live/';
 const CERT_KEY_FILE = 'privkey1.pem';
 const CERT_FILE = 'cert1.pem';
 
+log('>', process.argv.join(' '));
+
 cmdargs
   .option('-p, --port <n>', 'HTTP port.', parseInt)
   .option('-r, --root <s>', 'Dir with the comments data.')

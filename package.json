@@ -1,9 +1,10 @@
 {
   "scripts": {
-    "start": "npm i; npm run clean; npm run build; npm run http",
+    "start": "npm run build; npm run http",
     "clean": "rm -rf ./bin",
-    "build": "npm i; node_modules/.bin/tsc",
+    "build": "npm run clean; node_modules/.bin/tsc",
     "http": "node bin/http -p 42751 -r /var/lib/comntr -z 1024",
+    "test": "rm -r /tmp/comntr; node test/perf; du -sh /tmp/comntr",
     "scp-push": "scp -r src *.json root@$(cat vps/ip4):~/comntr.io/backend/"
   },
   "dependencies": {
