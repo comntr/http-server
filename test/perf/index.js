@@ -5,8 +5,9 @@ const sha1 = require('sha1');
 let runid = Math.random().toString(16).slice(2);
 let port = 55271;
 
-let ntopics = 1500;
-let ncomments = 25;
+let ntopics = 500;
+let ncomments = 100;
+let ngetcomments = 1e4;
 let nmaxreqs = 50;
 
 let srv = cp.spawn('node', [
@@ -43,34 +44,46 @@ log.cp = (pid, text) => {
 setTimeout(async () => {
   try {
     log.i('Starting the test.');
-    let time = Date.now();
-    await start();
-    let dt = Date.now() - time;
-    let qps = ntopics * ncomments / dt * 1000 | 0;
-    log.i('Test completed in', dt, 'ms');
-    log.i('Average QPS:', qps);
+
+    log.i('Adding comments.');
+    log.i('# of topics:', ntopics);
+    log.i('# of comments:', ncomments);
+    log.i('# max outstanding requests:', nmaxreqs);
+    await measure(addRandomComment, ntopics * ncomments);
+    
+    log.i('Getting comments.');
+    log.i('# of gets:', ngetcomments);
+    log.i('# max outstanding requests:', nmaxreqs);
+    await measure(getRandomComments, ngetcomments);
+  } catch (err) {
+    log.i(err);
   } finally {
+    log.i('Ending the test.');
     exit();
   }
 }, 2500);
 
-async function start() {
-  log.i('# of topics:', ntopics);
-  log.i('# of comments:', ncomments);
-  log.i('# max outstanding requests:', nmaxreqs);
+async function measure(sendreq, total) {
+  let time = Date.now();
+  await start(sendreq, total);
+  let dt = Date.now() - time;
+  let qps = total / dt * 1000 | 0;
+  log.i('QPS:', qps);
+}
 
-  let remaining = ntopics * ncomments;
+async function start(sendreq, total) {
+  let remaining = total;
   let pending = 0;
 
   let timer = setInterval(() => {
-    let pp = 1 - remaining / (ntopics * ncomments);
-    log.i(pp.toFixed(2), 'requests completed');
+    let pp = 1 - remaining / total;
+    log.i(`${pp * 100 | 0}% completed`);
   }, 1000);
 
   function refill(resolve, reject) {
     while (pending < nmaxreqs) {
       pending++;
-      addRandomComment().then(
+      sendreq().then(
         () => {
           pending--;
           remaining--;
@@ -91,6 +104,14 @@ async function start() {
   return new Promise(refill);
 }
 
+async function getRandomComments() {
+  let thash = sha1(Math.random() * ntopics | 0);
+  let res = await fetch('GET', '/' + thash);
+  if (res.statusCode != 200)
+    throw new Error(res.statusCode + ' ' + res.statusMessage);
+  // log.i('Comments:', res.body);
+}
+
 async function addRandomComment() {
   let thash = sha1(Math.random() * ntopics | 0);
   let ctext = Math.random().toString(16).slice(2);
@@ -102,7 +123,8 @@ async function addRandomComment() {
   ].join('\n');
   let chash = sha1(body);
   let res = await fetch('POST', '/' + thash + '/' + chash, { body });
-  if (res.statusCode != 201) throw new Error(res.statusCode + ' ' + res.statusMessage);
+  if (res.statusCode != 201)
+    throw new Error(res.statusCode + ' ' + res.statusMessage);
 }
 
 function fetch(method, path, { body, json, headers = {} } = {}) {
@@ -117,7 +139,7 @@ function fetch(method, path, { body, json, headers = {} } = {}) {
     path: path,
     method: method,
     headers: {
-      'Content-Length': Buffer.byteLength(body),
+      'Content-Length': body ? Buffer.byteLength(body) : 0,
       ...headers,
     }
   };
@@ -138,7 +160,7 @@ function fetch(method, path, { body, json, headers = {} } = {}) {
       res.on('error', reject);
     });
 
-    req.write(body);
+    if (body) req.write(body);
     req.end();
     // log.i('->', method, path);
   });

@@ -12,9 +12,9 @@ import * as LRU from 'lru-cache';
 import { log } from './log';
 import * as hashutil from './hash-util';
 
-const LRU_COMMENT_CACHE_SIZE = 1e5;
-const LRU_DIR_CACHE_SIZE = 100;
-const LRU_GET_CACHE_SIZE = 100;
+const LRU_COMMENT_CACHE_SIZE = 1e4;
+const LRU_DIR_CACHE_SIZE = 1e2;
+const LRU_GET_CACHE_SIZE = 1e2;
 const URL_GET_COMMENTS = /^\/[0-9a-f]{40}$/;
 const URL_RPC_COMMENTS_COUNT = /^\/rpc\/GetCommentsCount$/;
 const URL_ADD_COMMENT = /^\/[0-9a-f]{40}\/[0-9a-f]{40}$/;
