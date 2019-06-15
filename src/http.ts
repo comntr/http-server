@@ -366,7 +366,7 @@ function validateCommentSyntax(body: string) {
   }
 
   for (let header of hdrs.split('\n'))
-    if (!/^\w+: \S+$/.test(header)) {
+    if (!/^\w+(-\w+)*: \S+$/.test(header)) {
       log.v('Bad header:', header);
       return false;
     }
