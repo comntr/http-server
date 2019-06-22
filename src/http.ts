@@ -19,14 +19,16 @@ const LRU_GET_CACHE_SIZE = 1e2;
 const URL_GET_COMMENTS = /^\/[0-9a-f]{40}$/;
 const URL_RPC_COMMENTS_COUNT = /^\/rpc\/GetCommentsCount$/;
 const URL_ADD_COMMENT = /^\/[0-9a-f]{40}\/[0-9a-f]{40}$/;
-const URL_HTTP_QPS = /^\/status\/qps\/http$/;
-const URL_HTTP_QPS_SVG = /^\/status\/qps\/http\/svg$/;
+const URL_QPS_SVG = /^\/stats\/qps\/(\w+)\.svg$/;
 const CERT_DIR = '/etc/letsencrypt/archive/comntr.live/';
 const CERT_KEY_FILE = 'privkey1.pem';
 const CERT_FILE = 'cert1.pem';
 
 const qps = {
   http: new QPSMeter,
+  cget: new QPSMeter,
+  cadd: new QPSMeter,
+  nget: new QPSMeter,
 };
 
 log('>', process.argv.join(' '));
@@ -63,8 +65,8 @@ function matches(value, pattern) {
 }
 
 registerHandler('GET', '/', handleGetRoot);
-registerHandler('GET', URL_HTTP_QPS, handleGetHttpQps);
-registerHandler('GET', URL_HTTP_QPS_SVG, handleGetHttpQpsSvg);
+registerHandler('GET', URL_QPS_SVG, handleGetQpsSvg);
+registerHandler('GET', '/stats/qps', handleGetQpsDashboard);
 registerHandler('POST', URL_RPC_COMMENTS_COUNT, handleGetCommentsCount);
 registerHandler('GET', URL_GET_COMMENTS, handleGetComments);
 registerHandler('POST', URL_ADD_COMMENT, handleAddComment);
@@ -117,17 +119,16 @@ function handleGetRoot(req: http.IncomingMessage): Rsp {
   return { text: 'You have reached the comntr server.' };
 }
 
-// Returns JSON with the HTTP QPS counters.
+// Returns SVG with the QPS counters.
 //
-// GET /status/qps/http
+// GET /stats/qps/http
 // HTTP 200
-function handleGetHttpQps(req: http.IncomingMessage): Rsp {
-  return { json: qps.http.json };
-}
-
-function handleGetHttpQpsSvg(req: http.IncomingMessage): Rsp {
+function handleGetQpsSvg(req: http.IncomingMessage): Rsp {
+  let stat = URL_QPS_SVG.exec(req.url)[1];
+  let counter: QPSMeter = qps[stat];
+  if (!counter) return { statusCode: 404 };
   let ctime = Date.now() / 1000 | 0;
-  let [stime, nreqs] = qps.http.json;
+  let [stime, nreqs] = counter.json;
   let nsize = nreqs.length;
   let avgqps = [];
 
@@ -149,7 +150,8 @@ function handleGetHttpQpsSvg(req: http.IncomingMessage): Rsp {
       transform="scale(1,-1)"
       xmlns="http://www.w3.org/2000/svg">
 
-      <path fill="none" stroke="black"
+      <path fill="none"
+        stroke="black" stroke-width="2"
         vector-effect="non-scaling-stroke"
         d="${mpath}"/>
 
@@ -158,6 +160,37 @@ function handleGetHttpQpsSvg(req: http.IncomingMessage): Rsp {
   return {
     headers: { 'Content-Type': 'image/svg+xml' },
     body: svg,
+  };
+}
+
+function handleGetQpsDashboard(): Rsp {
+  return {
+    html: `
+      <!doctype html>
+      <html>
+      <head>
+        <title>QPS Dashboard</title>
+        <style>
+          body {
+            display: flex;
+            flex-wrap: wrap;
+          }
+          img {
+            width: 25%;
+            height: 25%;
+            margin: 1em;
+            background: #efe;
+          }
+        </style>
+      </head>
+      <body>
+        <img src="/stats/qps/http.svg" title="All HTTP requests.">
+        <img src="/stats/qps/cget.svg" title="GET comments.">
+        <img src="/stats/qps/cadd.svg" title="POST comments.">
+        <img src="/stats/qps/nget.svg" title="GET comments count.">
+      </body>
+      </html>
+    `,
   };
 }
 
@@ -184,6 +217,7 @@ function handleCorsPreflight(req: http.IncomingMessage): Rsp {
 // [34, 2, ...]
 //
 async function handleGetCommentsCount(req: http.IncomingMessage): Promise<Rsp> {
+  qps.nget.send();
   let reqBody = await downloadRequestBody(req);
   let topics = JSON.parse(reqBody);
   log.i('Topics:', topics.length);
@@ -203,6 +237,7 @@ async function handleGetCommentsCount(req: http.IncomingMessage): Promise<Rsp> {
 // <json>
 //
 function handleGetComments(req: http.IncomingMessage): Rsp {
+  qps.cget.send();
   let topicHash = req.url.slice(1);
   let topicDir = getTopicDir(topicHash);
   log.i('Loading comments.');
@@ -280,6 +315,7 @@ function handleGetComments(req: http.IncomingMessage): Rsp {
 // HTTP 201
 //
 async function handleAddComment(req: http.IncomingMessage): Promise<Rsp> {
+  qps.cadd.send();
   let [, topicHash, commentHash] = req.url.split('/');
   let commentBody = await downloadRequestBody(req);
 
