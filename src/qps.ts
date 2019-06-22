@@ -19,7 +19,7 @@ class QPSMeter {
     this.tprev = stime;
   }
 
-  get json() {
+  get json(): [number, number[]] {
     return [this.tprev, [...this.nreqs]];
   }
 }
