@@ -126,15 +126,28 @@ function handleGetHttpQps(req: http.IncomingMessage): Rsp {
 }
 
 function handleGetHttpQpsSvg(req: http.IncomingMessage): Rsp {
+  let ctime = Date.now() / 1000 | 0;
   let [stime, nreqs] = qps.http.json;
   let nsize = nreqs.length;
-  let maxqps = Math.max(...nreqs);
-  let mpath = nreqs.map((q, t) => `M ${t},${q}`).join(' ');
+  let avgqps = [];
+
+  log.i(`ctime = ${ctime}; stime = ${stime}; diff = ${ctime - stime} s`);
+
+  for (let dt = 0; dt < nsize; dt++) {
+    let i = (ctime + 1 + dt) % nsize;
+    let j = dt / 60 | 0;
+    avgqps[j] = avgqps[j] || 0;
+    avgqps[j] += nreqs[i] / 60;
+  }
+
+  let maxqps = Math.max(...avgqps);
+  let mpath = avgqps.map((q, t) => `${t > 0 ? 'L' : 'M'} ${t} ${q.toFixed(2)}`).join(' ');
 
   let svg = `
-    <svg viewBox="0 0 ${nsize} ${maxqps}" xmlns="http://www.w3.org/2000/svg">
-      <path stroke="black" stroke-width="1" d="${mpath}"/>
+    <svg viewBox="0 0 ${avgqps.length} ${maxqps.toFixed(2)}" xmlns="http://www.w3.org/2000/svg">
+      <path fill="none" stroke="black" d="${mpath}"/>
     </svg>`;
+
   return {
     headers: { 'Content-Type': 'image/svg+xml' },
     body: svg,
