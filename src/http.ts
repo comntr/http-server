@@ -144,8 +144,15 @@ function handleGetHttpQpsSvg(req: http.IncomingMessage): Rsp {
   let mpath = avgqps.map((q, t) => `${t > 0 ? 'L' : 'M'} ${t} ${q.toFixed(2)}`).join(' ');
 
   let svg = `
-    <svg viewBox="0 0 ${avgqps.length} ${maxqps.toFixed(2)}" xmlns="http://www.w3.org/2000/svg">
-      <path fill="none" stroke="black" d="${mpath}"/>
+    <svg viewBox="0 0 ${avgqps.length} 10"
+      preserveAspectRatio="none"
+      transform="scale(1,-1)"
+      xmlns="http://www.w3.org/2000/svg">
+
+      <path fill="none" stroke="black"
+        vector-effect="non-scaling-stroke"
+        d="${mpath}"/>
+
     </svg>`;
 
   return {
