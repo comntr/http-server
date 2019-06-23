@@ -145,10 +145,12 @@ function handleGetQpsSvg(req: http.IncomingMessage): Rsp {
   let mpath = avgqps.map((q, t) => `${t > 0 ? 'L' : 'M'} ${t} ${q.toFixed(2)}`).join(' ');
 
   let svg = `
-    <svg viewBox="0 0 ${avgqps.length} 10"
+    <svg viewBox="0 0 ${avgqps.length} ${Math.max(1, maxqps)}"
       preserveAspectRatio="none"
       transform="scale(1,-1)"
       xmlns="http://www.w3.org/2000/svg">
+
+      <!-- max qps: ${maxqps} -->
 
       <path fill="none"
         stroke="black" stroke-width="2"
@@ -176,9 +178,9 @@ function handleGetQpsDashboard(): Rsp {
             flex-wrap: wrap;
           }
           img {
-            width: 25%;
-            height: 25%;
-            margin: 1em;
+            width: 250px;
+            height: 250px;
+            margin: 25px;
             background: #efe;
           }
         </style>
