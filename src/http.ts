@@ -228,7 +228,9 @@ async function handleGetCommentsCount(req: http.IncomingMessage): Promise<Rsp> {
   qps.nget.send();
   let reqBody = await downloadRequestBody(req);
   let topics = JSON.parse(reqBody);
-  log.i('Topics:', topics.length);
+
+  if (topics.length > 1)
+    log.i('Topics:', topics.length);
 
   let counts = topics.map(topicHash => {
     let filenames = getFilenames(topicHash);
