@@ -10,7 +10,9 @@ export function log(...args) {
   console.log(ts, ...args);
 }
 
-log.v = (...args) => log('V', ...args);
+log.verbose = false;
+
+log.v = (...args) => log.verbose && log('V', ...args);
 log.i = (...args) => log('I', ...args);
 log.w = (...args) => log('W', ...args);
 log.e = (...args) => log('E', ...args);

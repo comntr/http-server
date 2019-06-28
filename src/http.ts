@@ -39,7 +39,11 @@ cmdargs
   .option('-p, --port <n>', 'HTTP port.', parseInt)
   .option('-r, --root <s>', 'Dir with the comments data.')
   .option('-z, --gzip <n>', 'GZips responses bigger than <n> bytes.')
+  .option('-v, --verbose', 'Verbose logging.')
   .parse(process.argv);
+
+log.i('Verbose logging?', cmdargs.verbose);
+log.verbose = cmdargs.verbose;
 
 const minGZipRspSize = cmdargs.gzip;
 if (minGZipRspSize > 0) {
@@ -244,7 +248,7 @@ function handleGetComments(req: http.IncomingMessage): Rsp {
   qps.cget.send();
   let topicHash = req.url.slice(1);
   let topicDir = getTopicDir(topicHash);
-  log.i('Loading comments.');
+  log.i('Loading comments:', topicHash.slice(0, 8));
 
   if (!fs.existsSync(topicDir)) {
     log.i('No such topic.');
@@ -291,7 +295,6 @@ function handleGetComments(req: http.IncomingMessage): Rsp {
   }
 
   log.i('fs.readFile x ' + filenames.length + ':', Date.now() - time2, 'ms');
-
 
   let boundary = sha1(new Date().toJSON()).slice(0, 7);
   let contentType = 'multipart/mixed; boundary="' + boundary + '"';
@@ -353,7 +356,10 @@ async function handleAddComment(req: http.IncomingMessage): Promise<Rsp> {
     fs.mkdirSync(topicDir);
   }
 
-  log.i('Adding comment /' + commentHash);
+  log.i('Adding comment:',
+    commentHash.slice(0, 8), 'to', topicHash.slice(0, 8),
+    ':', commentBody.length, 'bytes');
+
   cachedGets.del('/' + topicHash);
   cachedTopics.del(topicHash);
   cachedXorHashes.del(topicHash);
@@ -366,7 +372,7 @@ async function handleAddComment(req: http.IncomingMessage): Promise<Rsp> {
 
 async function handleHttpRequest(req: http.IncomingMessage, res: http.ServerResponse) {
   let htime = Date.now();
-  log.i(req.method, req.url);
+  log.v(req.method, req.url);
   qps.http.send();
   res.setHeader('Access-Control-Allow-Origin', '*');
 
@@ -435,7 +441,7 @@ async function handleHttpRequest(req: http.IncomingMessage, res: http.ServerResp
     }
   } finally {
     res.end();
-    log.i('HTTP', res.statusCode, 'in', Date.now() - htime, 'ms');
+    log.v('HTTP', res.statusCode, 'in', Date.now() - htime, 'ms');
   }
 }
 
@@ -524,10 +530,8 @@ function downloadRequestBody(req: http.IncomingMessage) {
       let n = chunk.length;
 
       if (size + n > maxlen) {
-        let error = new BadRequest('Request Too Large');
-        log.w('Request is too large:', n, '>', maxlen);
         aborted = true;
-        reject(error);
+        reject(new BadRequest('Request Too Large'));
       } else {
         body += chunk.toString();
         size += n;
