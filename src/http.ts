@@ -11,6 +11,8 @@ import * as LRU from 'lru-cache';
 
 import { log } from './log';
 import * as hashutil from './hash-util';
+import rules from './rules';
+import { BadRequest } from './errors';
 import QPSMeter from './qps';
 
 const LRU_COMMENT_CACHE_SIZE = 1e4;
@@ -421,10 +423,16 @@ async function handleHttpRequest(req: http.IncomingMessage, res: http.ServerResp
     res.statusCode = rsp.statusCode || 200;
     res.statusMessage = rsp.statusMessage || '';
   } catch (err) {
-    log.e(err);
-    res.statusCode = 500;
-    res.statusMessage = (err && err.message || '') + '';
-    res.write((err && err.stack || err) + '');
+    if (err instanceof BadRequest) {
+      log.w(err.message);
+      res.statusCode = 400;
+      res.statusMessage = err.message;
+    } else {
+      log.e(err);
+      res.statusCode = 500;
+      res.statusMessage = err.message;
+      res.write(err.message);
+    }
   } finally {
     res.end();
     log.i('HTTP', res.statusCode, 'in', Date.now() - htime, 'ms');
@@ -506,12 +514,27 @@ function getTopicDir(hash: string) {
 
 function downloadRequestBody(req: http.IncomingMessage) {
   let body = '';
-  return new Promise<string>(resolve => {
-    req.on('data', chunk => {
-      body += chunk.toString();
+  let size = 0;
+  let aborted = false;
+  let maxlen = rules.request.body.maxlen;
+
+  return new Promise<string>((resolve, reject) => {
+    req.on('data', (chunk: Buffer) => {
+      if (aborted) return;
+      let n = chunk.length;
+
+      if (size + n > maxlen) {
+        let error = new BadRequest('Request Too Large');
+        log.w('Request is too large:', n, '>', maxlen);
+        aborted = true;
+        reject(error);
+      } else {
+        body += chunk.toString();
+        size += n;
+      }
     });
     req.on('end', () => {
-      resolve(body);
+      if (!aborted) resolve(body);
     });
   });
 }
