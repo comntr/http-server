@@ -21,7 +21,7 @@ const LRU_GET_CACHE_SIZE = 1e2;
 const URL_GET_COMMENTS = /^\/[0-9a-f]{40}$/;
 const URL_RPC_COMMENTS_COUNT = /^\/rpc\/GetCommentsCount$/;
 const URL_ADD_COMMENT = /^\/[0-9a-f]{40}\/[0-9a-f]{40}$/;
-const URL_QPS_SVG = /^\/stats\/qps\/(\w+)\.svg$/;
+const URL_GET_STATS_QPS = /^\/stats\/qps\/(\w+)$/;
 const CERT_DIR = '/etc/letsencrypt/archive/comntr.live/';
 const CERT_KEY_FILE = 'privkey1.pem';
 const CERT_FILE = 'cert1.pem';
@@ -71,8 +71,7 @@ function matches(value, pattern) {
 }
 
 registerHandler('GET', '/', handleGetRoot);
-registerHandler('GET', URL_QPS_SVG, handleGetQpsSvg);
-registerHandler('GET', '/stats/qps', handleGetQpsDashboard);
+registerHandler('GET', URL_GET_STATS_QPS, handleGetStatsQps);
 registerHandler('POST', URL_RPC_COMMENTS_COUNT, handleGetCommentsCount);
 registerHandler('GET', URL_GET_COMMENTS, handleGetComments);
 registerHandler('POST', URL_ADD_COMMENT, handleAddComment);
@@ -125,83 +124,6 @@ function handleGetRoot(req: http.IncomingMessage): Rsp {
   return { text: 'You have reached the comntr server.' };
 }
 
-// Returns SVG with the QPS counters.
-//
-// GET /stats/qps/http
-// HTTP 200
-function handleGetQpsSvg(req: http.IncomingMessage): Rsp {
-  let stat = URL_QPS_SVG.exec(req.url)[1];
-  let counter: QPSMeter = qps[stat];
-  if (!counter) return { statusCode: 404 };
-  let ctime = Date.now() / 1000 | 0;
-  let [stime, nreqs] = counter.json;
-  let nsize = nreqs.length;
-  let avgqps = [];
-
-  log.i(`ctime = ${ctime}; stime = ${stime}; diff = ${ctime - stime} s`);
-
-  for (let dt = 0; dt < nsize; dt++) {
-    let i = (ctime + 1 + dt) % nsize;
-    let j = dt / 60 | 0;
-    avgqps[j] = avgqps[j] || 0;
-    avgqps[j] += nreqs[i] / 60;
-  }
-
-  let maxqps = Math.max(...avgqps);
-  let mpath = avgqps.map((q, t) => `${t > 0 ? 'L' : 'M'} ${t} ${q.toFixed(2)}`).join(' ');
-
-  let svg = `
-    <svg viewBox="0 0 ${avgqps.length} ${Math.max(1, maxqps)}"
-      preserveAspectRatio="none"
-      transform="scale(1,-1)"
-      xmlns="http://www.w3.org/2000/svg">
-
-      <!-- max qps: ${maxqps} -->
-
-      <path fill="none"
-        stroke="black" stroke-width="2"
-        vector-effect="non-scaling-stroke"
-        d="${mpath}"/>
-
-    </svg>`;
-
-  return {
-    headers: { 'Content-Type': 'image/svg+xml' },
-    body: svg,
-  };
-}
-
-function handleGetQpsDashboard(): Rsp {
-  return {
-    html: `
-      <!doctype html>
-      <html>
-      <head>
-        <title>QPS Dashboard</title>
-        <style>
-          body {
-            display: flex;
-            flex-wrap: wrap;
-          }
-          img {
-            width: 250px;
-            height: 250px;
-            margin: 25px;
-            background: #efe;
-          }
-        </style>
-      </head>
-      <body>
-        <img src="/stats/qps/http.svg" title="All HTTP requests.">
-        <img src="/stats/qps/cget.svg" title="GET comments.">
-        <img src="/stats/qps/cadd.svg" title="POST comments.">
-        <img src="/stats/qps/nget.svg" title="GET comments count.">
-      </body>
-      </html>
-    `,
-  };
-}
-
 // Handles the CORS preflight request.
 //
 // OPTIONS /<sha1>/...
@@ -215,6 +137,15 @@ function handleCorsPreflight(req: http.IncomingMessage): Rsp {
       'Access-Control-Allow-Headers': 'If-None-Match',
     }
   };
+}
+
+// Returns JSON with stats.
+function handleGetStatsQps(req: http.IncomingMessage): Rsp {
+  let [,qpsname] = URL_GET_STATS_QPS.exec(req.url);
+  let counter = qps[qpsname];
+  if (!counter) throw new BadRequest('No Such Stat');
+  let json = counter.json;
+  return { json };
 }
 
 // Returns the number of comments in a topic.
