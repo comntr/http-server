@@ -5,14 +5,16 @@ import * as zlib from 'zlib';
 import * as fs from 'fs';
 
 import * as cmdargs from 'commander';
-import * as mkdirp from 'mkdirp';
 import * as sha1 from 'sha1';
 import * as LRU from 'lru-cache';
 
+import { Rsp } from './rsp';
 import { log } from './log';
 import * as hashutil from './hash-util';
-import rules from './rules';
-import { BadRequest } from './errors';
+import { BadRequest, NotFound } from './errors';
+import { registerHandler, executeHandler } from './http-handler';
+import { initStorage, getTopicDir, getCommentFilePath, downloadRequestBody } from './storage';
+import './room-rules';
 import QPSMeter from './qps';
 
 const LRU_COMMENT_CACHE_SIZE = 1e4;
@@ -52,23 +54,7 @@ if (minGZipRspSize > 0) {
   log.i('GZip disabled.');
 }
 
-const dataDir = path.resolve(cmdargs.root);
-log.i('Data dir:', dataDir);
-if (!fs.existsSync(dataDir))
-  mkdirp.sync(dataDir);
-
-let handlers = [];
-
-function registerHandler(method, url, handler) {
-  handlers.push({ method, url, handler });
-  log.i('Registered handler:', method, url);
-}
-
-function matches(value, pattern) {
-  return pattern.test ?
-    pattern.test(value) :
-    pattern == value;
-}
+initStorage(cmdargs.root);
 
 registerHandler('GET', '/', handleGetRoot);
 registerHandler('GET', URL_GET_STATS_QPS, handleGetStatsQps);
@@ -77,16 +63,6 @@ registerHandler('GET', URL_GET_COMMENTS, handleGetComments);
 registerHandler('POST', URL_ADD_COMMENT, handleAddComment);
 registerHandler('OPTIONS', /^\/.*$/, handleCorsPreflight);
 log.i('All HTTP handlers registered.');
-
-interface Rsp {
-  statusCode?: number;
-  statusMessage?: string;
-  headers?: any;
-  text?: string;
-  html?: string;
-  json?: any;
-  body?: string;
-}
 
 let cachedComments = new LRU<string, string>(LRU_COMMENT_CACHE_SIZE); // comment sha1 -> comment
 let cachedTopics = new LRU<string, string[]>(LRU_DIR_CACHE_SIZE); // topic sha1 -> comment sha1s
@@ -141,7 +117,7 @@ function handleCorsPreflight(req: http.IncomingMessage): Rsp {
 
 // Returns JSON with stats.
 function handleGetStatsQps(req: http.IncomingMessage): Rsp {
-  let [,qpsname] = URL_GET_STATS_QPS.exec(req.url);
+  let [, qpsname] = URL_GET_STATS_QPS.exec(req.url);
   let counter = qps[qpsname];
   if (!counter) throw new BadRequest('No Such Stat');
   let json = counter.json;
@@ -310,16 +286,7 @@ async function handleHttpRequest(req: http.IncomingMessage, res: http.ServerResp
   res.setHeader('Access-Control-Allow-Origin', '*');
 
   try {
-    let rsp = null;
-
-    if (!rsp) {
-      for (let { method, url, handler } of handlers) {
-        if (!matches(req.method, method)) continue;
-        if (!matches(req.url, url)) continue;
-        rsp = await handler(req);
-        break;
-      }
-    }
+    let rsp = await executeHandler(req);
 
     if (!rsp) {
       rsp = {
@@ -333,7 +300,7 @@ async function handleHttpRequest(req: http.IncomingMessage, res: http.ServerResp
 
     if (useGZip) {
       let gtime = Date.now();
-      let gzipped = await gzipText(rsp.body);
+      let gzipped = await gzipText(rsp.body as string);
       log.i('gzip time:', Date.now() - gtime, 'ms');
       rsp.body = gzipped;
       rsp.headers = {
@@ -365,6 +332,10 @@ async function handleHttpRequest(req: http.IncomingMessage, res: http.ServerResp
     if (err instanceof BadRequest) {
       log.w(err.message);
       res.statusCode = 400;
+      res.statusMessage = err.message;
+    } else if (err instanceof NotFound) {
+      log.w(err.message);
+      res.statusCode = 404;
       res.statusMessage = err.message;
     } else {
       log.e(err);
@@ -441,37 +412,3 @@ let server = createServer();
 server.listen(cmdargs.port);
 server.on('error', err => log.e(err));
 server.on('listening', () => log.i('Listening on port', cmdargs.port));
-
-function getCommentFilePath(topicHash: string, commentHash: string) {
-  let topicDir = getTopicDir(topicHash);
-  return path.join(topicDir, commentHash);
-}
-
-function getTopicDir(hash: string) {
-  return path.join(dataDir, hash);
-}
-
-function downloadRequestBody(req: http.IncomingMessage) {
-  let body = '';
-  let size = 0;
-  let aborted = false;
-  let maxlen = rules.request.body.maxlen;
-
-  return new Promise<string>((resolve, reject) => {
-    req.on('data', (chunk: Buffer) => {
-      if (aborted) return;
-      let n = chunk.length;
-
-      if (size + n > maxlen) {
-        aborted = true;
-        reject(new BadRequest('Request Too Large'));
-      } else {
-        body += chunk.toString();
-        size += n;
-      }
-    });
-    req.on('end', () => {
-      if (!aborted) resolve(body);
-    });
-  });
-}
