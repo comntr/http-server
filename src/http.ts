@@ -20,6 +20,7 @@ import QPSMeter from './qps';
 const LRU_COMMENT_CACHE_SIZE = 1e4;
 const LRU_DIR_CACHE_SIZE = 1e2;
 const LRU_GET_CACHE_SIZE = 1e2;
+const SHA1_PATTERN = /^[0-9a-f]{40}$/;
 const URL_GET_COMMENTS = /^\/[0-9a-f]{40}$/;
 const URL_RPC_COMMENTS_COUNT = /^\/rpc\/GetCommentsCount$/;
 const URL_ADD_COMMENT = /^\/[0-9a-f]{40}\/[0-9a-f]{40}$/;
@@ -75,6 +76,7 @@ function getFilenames(topicId) {
   let topicDir = getTopicDir(topicId);
   filenames = !fs.existsSync(topicDir) ? [] :
     fs.readdirSync(topicDir);
+  filenames = filenames.filter(name => SHA1_PATTERN.test(name));
   cachedTopics.set(topicId, filenames);
   return filenames;
 }
@@ -83,6 +85,7 @@ function getTopicXorHash(topicId) {
   let xorhash = cachedXorHashes.get(topicId);
   if (!xorhash) {
     let filenames = getFilenames(topicId);
+    if (!filenames.length) return null;
     let binhashes = filenames.map(hashutil.hex2bin);
     let binxorhash = hashutil.xorall(binhashes);
     xorhash = hashutil.bin2hex(binxorhash);
@@ -106,11 +109,14 @@ function handleGetRoot(req: http.IncomingMessage): Rsp {
 // HTTP 200
 //
 function handleCorsPreflight(req: http.IncomingMessage): Rsp {
+  let method = req.headers['access-control-request-method'];
+  let headers = req.headers['access-control-request-headers'];
+
   return {
     headers: {
       'Access-Control-Max-Age': '86400',
-      'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE',
-      'Access-Control-Allow-Headers': 'If-None-Match',
+      'Access-Control-Allow-Methods': method,
+      'Access-Control-Allow-Headers': headers,
     }
   };
 }

@@ -1,4 +1,4 @@
-export function hex2bin(hs: string) {
+export function hex2bin(hs: string): Uint8Array {
   let a = new Uint8Array(hs.length / 2);
   for (let i = 0; i < a.length; i++) {
     let si = hs.slice(i * 2, i * 2 + 2);
