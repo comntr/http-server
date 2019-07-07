@@ -12,11 +12,11 @@ import * as sha1 from 'sha1';
 import mkdirp = require('mkdirp');
 import * as supercop from 'supercop.wasm';
 
-import * as storage from './storage';
-import { NotFound, BadRequest } from './errors';
-import { log } from './log';
-import { Rsp } from './rsp';
-import { hex2bin } from './hash-util';
+import * as storage from '../storage';
+import { NotFound, BadRequest } from '../errors';
+import { log } from '../log';
+import { Rsp } from '../rsp';
+import { hex2bin } from '../hash-util';
 import { HttpHandler, HttpMethod } from './http-handler';
 
 const URL_RULES_REGEX = /^[/]([0-9a-f]{40})[/]rules$/;

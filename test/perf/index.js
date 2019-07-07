@@ -5,9 +5,9 @@ const sha1 = require('sha1');
 let runid = Math.random().toString(16).slice(2);
 let port = 55271;
 
-let ntopics = 500;
-let ncomments = 100;
-let ngetcomments = 1e4;
+let ntopics = 250;
+let ncomments = 25;
+let ngetcomments = 1e3;
 let nmaxreqs = 50;
 
 let srv = cp.spawn('node', [

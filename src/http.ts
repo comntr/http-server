@@ -12,9 +12,9 @@ import { Rsp } from './rsp';
 import { log } from './log';
 import * as hashutil from './hash-util';
 import { BadRequest, NotFound } from './errors';
-import { registerHandler, executeHandler } from './http-handler';
+import { registerHandler, executeHandler } from './handlers/http-handler';
 import { initStorage, getTopicDir, getCommentFilePath, downloadRequestBody } from './storage';
-import './room-rules';
+import './handlers/room-rules';
 import QPSMeter from './qps';
 
 const LRU_COMMENT_CACHE_SIZE = 1e4;

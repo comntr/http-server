@@ -1,6 +1,6 @@
 import * as http from 'http';
-import { log } from './log';
-import { Rsp } from './rsp';
+import { log } from '../log';
+import { Rsp } from '../rsp';
 
 type MethodSpec = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'OPTIONS';
 type UrlPattern = RegExp | string;
