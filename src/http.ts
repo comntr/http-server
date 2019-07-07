@@ -7,7 +7,7 @@ import * as cmdargs from 'commander';
 
 import { Rsp } from './rsp';
 import { log } from './log';
-import { BadRequest, NotFound } from './errors';
+import { BadRequest, HttpError } from './errors';
 import { registerHandler, executeHandler } from './handlers/http-handler';
 import * as storage from './storage';
 import './handlers/room-rules';
@@ -156,19 +156,14 @@ async function handleHttpRequest(req: http.IncomingMessage, res: http.ServerResp
     res.statusCode = rsp.statusCode || 200;
     res.statusMessage = rsp.statusMessage || '';
   } catch (err) {
-    if (err instanceof BadRequest) {
+    if (err instanceof HttpError) {
       log.w(err.message);
-      res.statusCode = 400;
-      res.statusMessage = err.message;
-    } else if (err instanceof NotFound) {
-      log.w(err.message);
-      res.statusCode = 404;
-      res.statusMessage = err.message;
+      res.statusCode = err.code;
+      res.statusMessage = err.status;
+      res.write(err.description);
     } else {
       log.e(err);
       res.statusCode = 500;
-      res.statusMessage = err.message;
-      res.write(err.message);
     }
   } finally {
     res.end();

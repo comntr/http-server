@@ -9,13 +9,19 @@ import * as http from 'http';
 import * as path from 'path';
 import * as sha1 from 'sha1';
 
+import { getSupercop } from '../ed25519'
 import * as storage from '../storage';
-import { BadRequest } from '../errors';
+import { hex2bin } from '../hash-util';
+import { BadRequest, Unauthorized } from '../errors';
 import { log } from '../log';
 import { Rsp } from '../rsp';
 import * as qps from '../qps';
 import { HttpHandler, HttpMethod } from './http-handler';
 
+const VALID_COMMENT_TEXT = /^\S[\x01-\x7F]+\S$/; // ASCII only, for now
+const VALID_COMMENT_HEADER = /^\w+(-\w+)*: \S+$/;
+const H_SIGNATURE = /^Signature: (\w+)$/m;
+const H_PUBKEY = /^Public-Key: (\w+)$/m;
 const URL_COMMENTS = /^\/[0-9a-f]{40}(\/[0-9a-f]{40})?$/;
 
 @HttpHandler(URL_COMMENTS)
@@ -95,12 +101,17 @@ class CommentsHandler {
   }
 
   @HttpMethod('POST')
-  async set(req: http.IncomingMessage): Promise<Rsp> {
+  async add(req: http.IncomingMessage): Promise<Rsp> {
     qps.cadd.send();
     let [, topicHash, commentHash] = req.url.split('/');
     let commentBody = await storage.downloadRequestBody(req);
+    let actualCommentHash = sha1(commentBody);
 
-    if (sha1(commentBody) != commentHash) {
+    if (!commentHash) {
+      // POST /<t-hash> is accepted too.
+      commentHash = actualCommentHash;
+      log.v('Actual comment sha1:', actualCommentHash);
+    } else if (actualCommentHash != commentHash) {
       log.i('Actual SHA1:', sha1(commentBody));
       return {
         statusCode: 400,
@@ -108,12 +119,8 @@ class CommentsHandler {
       };
     }
 
-    if (!validateCommentSyntax(commentBody)) {
-      return {
-        statusCode: 400,
-        statusMessage: 'Bad Syntax',
-      };
-    }
+    await validateCommentSyntax(commentBody);
+    await verifyTopicRules(topicHash, commentBody);
 
     let topicDir = storage.getTopicDir(topicHash);
     let commentFilePath = storage.getCommentFilePath(topicHash, commentHash);
@@ -145,35 +152,72 @@ class CommentsHandler {
   }
 }
 
+async function verifyTopicRules(thash: string, cdata: string) {
+  let rules = storage.getTopicRules(thash);
+  if (!rules) return;
+
+  let owner = JSON.parse(rules).owner;
+  if (!owner) {
+    log.i('rules.owner is null:', thash);
+    return;
+  }
+
+  let pubkey = getCommentPubKey(cdata);
+  if (!pubkey) throw new BadRequest('No Public Key');
+
+  let userid = sha1(pubkey);
+  if (userid != owner) {
+    log.i(`User id doesn't match the owner id:`, userid, owner);
+    throw new Unauthorized;
+  }
+
+  await verifyCommentSignature(cdata);
+  log.i('ed25519 signature is ok');
+}
+
+function getCommentPubKey(cdata: string) {
+  let match = H_PUBKEY.exec(cdata);
+  return match && match[1];
+}
+
+function getCommentSig(cdata: string) {
+  let match = H_SIGNATURE.exec(cdata);
+  return match && match[1];
+}
+
+async function verifyCommentSignature(cdata: string) {
+  let signature = hex2bin(getCommentSig(cdata));
+  let publicKey = hex2bin(getCommentPubKey(cdata));
+
+  if (!signature) throw new BadRequest('No Signature');
+  if (!publicKey) throw new BadRequest('No Public Key');
+
+  let signedPart = cdata.slice(cdata.indexOf('\n') + 1);
+  let signedPartBytes = Buffer.from(signedPart);
+  let supercop = await getSupercop();
+  let valid = supercop.verify(signature, signedPartBytes, publicKey);
+
+  if (!valid) {
+    log.i(`Wrong ed25519 signature:`,
+      signature.length, signedPartBytes.length, publicKey.length);
+    throw new BadRequest('Bad Signature');
+  }
+}
+
 function validateCommentSyntax(body: string) {
   let sep = body.indexOf('\n\n');
-
-  if (sep < 0) {
-    log.v('No \\n\\n separator.');
-    return false;
-  }
+  if (sep < 0) throw new BadRequest('No LF LF Separator');
 
   let hdrs = body.slice(0, sep);
   let text = body.slice(sep + 2);
 
-  // log.v('Headers:', JSON.stringify(hdrs));
-  // log.v('Comment text:', JSON.stringify(text));
-
-  if (!hdrs || !text) {
-    log.v('Missing headers or comment text.');
-    return false;
-  }
+  if (!hdrs) throw new BadRequest('No Comment Headers');
+  if (!text) throw new BadRequest('No Comment Data');
 
   for (let header of hdrs.split('\n'))
-    if (!/^\w+(-\w+)*: \S+$/.test(header)) {
-      log.v('Bad header:', header);
-      return false;
-    }
+    if (!VALID_COMMENT_HEADER.test(header))
+      throw new BadRequest('Bad Comment Header', header);
 
-  if (!/^\S[^\x00]+\S$/.test(text)) {
-    log.v('Bad comment text.');
-    return false;
-  }
-
-  return true;
+  if (!VALID_COMMENT_TEXT.test(text))
+    throw new BadRequest('Bad Comment Text');
 }

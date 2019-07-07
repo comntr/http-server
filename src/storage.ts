@@ -14,6 +14,7 @@ const LRU_DIR_CACHE_SIZE = 1e2;
 const LRU_COMMENT_CACHE_SIZE = 1e4;
 const LRU_GET_CACHE_SIZE = 1e2;
 const SHA1_PATTERN = /^[0-9a-f]{40}$/;
+const RULES_FILENAME = '.rules';
 
 let dataDir = '';
 
@@ -27,6 +28,22 @@ export function initStorage(dir: string) {
   log.i('Data dir:', dataDir);
   if (!fs.existsSync(dataDir))
     mkdirp.sync(dataDir);
+}
+
+export function getTopicRules(thash: string): string {
+  let tdir = getTopicDir(thash);
+  let fpath = path.join(tdir, RULES_FILENAME);
+  if (!fs.existsSync(fpath)) return null;
+  let json = fs.readFileSync(fpath, 'utf8');
+  return json;
+}
+
+export function setTopicRules(thash: string, json: string) {
+  let tdir = getTopicDir(thash);
+  let fpath = path.join(tdir, RULES_FILENAME);
+  if (!fs.existsSync(tdir)) mkdirp.sync(tdir);
+  fs.writeFileSync(fpath, json, 'utf8');
+  log.i('Rules updated:', fpath, json);
 }
 
 export function getCommentFilePath(thash: string, chash: string) {

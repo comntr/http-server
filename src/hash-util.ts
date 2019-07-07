@@ -1,4 +1,5 @@
 export function hex2bin(hs: string): Uint8Array {
+  if (!hs) return null;
   let a = new Uint8Array(hs.length / 2);
   for (let i = 0; i < a.length; i++) {
     let si = hs.slice(i * 2, i * 2 + 2);
@@ -12,6 +13,7 @@ export function hd2s(x: number) {
 }
 
 export function bin2hex(a: Uint8Array) {
+  if (!a || !a.length) return null;
   return [...a].map(hd2s).join('');
 }
 
