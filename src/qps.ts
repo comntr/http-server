@@ -25,3 +25,8 @@ class QPSMeter {
 }
 
 export default QPSMeter;
+
+export const http = new QPSMeter;
+export const cget = new QPSMeter;
+export const cadd = new QPSMeter;
+export const nget = new QPSMeter;
