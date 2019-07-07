@@ -3,14 +3,10 @@ import * as http from 'http';
 import * as path from 'path';
 import * as zlib from 'zlib';
 import * as fs from 'fs';
-
 import * as cmdargs from 'commander';
-import * as sha1 from 'sha1';
-import * as LRU from 'lru-cache';
 
 import { Rsp } from './rsp';
 import { log } from './log';
-import * as hashutil from './hash-util';
 import { BadRequest, NotFound } from './errors';
 import { registerHandler, executeHandler } from './handlers/http-handler';
 import * as storage from './storage';
@@ -56,7 +52,7 @@ log.i('All HTTP handlers registered.');
 // GET /
 // HTTP 200
 //
-function handleGetRoot(req: http.IncomingMessage): Rsp {
+function handleGetRoot(): Rsp {
   return { text: 'You have reached the comntr server.' };
 }
 

@@ -7,17 +7,13 @@
 import * as fs from 'fs';
 import * as http from 'http';
 import * as path from 'path';
-
 import * as sha1 from 'sha1';
-import mkdirp = require('mkdirp');
-import * as LRU from 'lru-cache';
 
 import * as storage from '../storage';
-import { NotFound, BadRequest } from '../errors';
+import { BadRequest } from '../errors';
 import { log } from '../log';
 import { Rsp } from '../rsp';
 import * as qps from '../qps';
-import { hex2bin } from '../hash-util';
 import { HttpHandler, HttpMethod } from './http-handler';
 
 const URL_COMMENTS = /^\/[0-9a-f]{40}(\/[0-9a-f]{40})?$/;
