@@ -13,7 +13,7 @@ import mkdirp = require('mkdirp');
 
 import { getSupercop } from '../ed25519';
 import * as storage from '../storage';
-import { NotFound, BadRequest } from '../errors';
+import { NotFound, BadRequest, Unauthorized } from '../errors';
 import { log } from '../log';
 import { Rsp } from '../rsp';
 import { hex2bin } from '../hash-util';
@@ -41,15 +41,11 @@ class RoomRulesHandler {
     let ftag = req.headers[H_FILTER_TAG.toLowerCase()] as string;
     let pubkey = req.headers[H_PUBKEY.toLowerCase()] as string;
     let signature = req.headers[H_SIGNATURE.toLowerCase()] as string;
-    let text = await storage.downloadRequestBody(req);
-
-    if (!verifyJson(text))
-      throw new BadRequest('Invalid JSON');
-
-    if (!await verifySignature(text, thash, ftag, pubkey, signature))
-      throw new BadRequest('Bad Signature');
-
-    storage.setTopicRules(thash, text);
+    let newRules = await storage.downloadRequestBody(req);
+    await verifyJson(newRules);
+    await verifySignature(newRules, thash, ftag, pubkey, signature);
+    await verifyCanSetRules(thash, pubkey);
+    storage.setTopicRules(thash, newRules);
     return { statusCode: 200 };
   }
 }
@@ -57,10 +53,18 @@ class RoomRulesHandler {
 function verifyJson(text: string) {
   try {
     JSON.parse(text);
-    return true;
   } catch (err) {
-    return false;
+    throw new BadRequest('Invalid JSON');
   }
+}
+
+function verifyCanSetRules(thash: string, pubkey: string) {
+  let rules = storage.getTopicRules(thash);
+  if (!rules) return;
+  let ownerid = JSON.parse(rules).owner;
+  if (!ownerid) return log.w('rules.owner is missing:', thash);
+  let userid = sha1(pubkey);
+  if (ownerid != userid) throw new Unauthorized;
 }
 
 async function verifySignature(
@@ -70,10 +74,8 @@ async function verifySignature(
   pubkey: string,
   signature: string) {
 
-  if (!signature || !payload || !tag || !thash || !pubkey) {
-    log.i('Missing signature/payload/etc. fields.');
-    return false;
-  }
+  if (!signature || !payload || !tag || !thash || !pubkey)
+    throw new BadRequest('No Signature');
 
   let ethash = sha1([
     sha1(pubkey),
@@ -82,7 +84,7 @@ async function verifySignature(
 
   if (ethash != thash) {
     log.i('Expected thash:', ethash);
-    return false;
+    throw new BadRequest('Bad THash');
   }
 
   let payloadBytes = Buffer.from(payload);
@@ -91,5 +93,6 @@ async function verifySignature(
   let supercop = await getSupercop();
   let matches = supercop.verify(signatureBytes, payloadBytes, pubkeyBytes);
 
-  return matches;
+  if (!matches)
+    throw new BadRequest('Bad Signature');
 }

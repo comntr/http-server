@@ -30,6 +30,7 @@ export function initStorage(dir: string) {
     mkdirp.sync(dataDir);
 }
 
+/** Returns null if there are no rules. */
 export function getTopicRules(thash: string): string {
   let tdir = getTopicDir(thash);
   let fpath = path.join(tdir, RULES_FILENAME);
