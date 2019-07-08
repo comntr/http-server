@@ -5,7 +5,7 @@
     "build": "npm run clean; node_modules/.bin/tsc",
     "http": "sudo node bin/http -p 42751 -r /var/lib/comntr -z 1024",
     "test": "rm -r /tmp/comntr; node test/perf; du -sh /tmp/comntr",
-    "scp-push": "scp -r src *.json root@$(cat vps/ip4):~/comntr.io"
+    "scp-push": "scp -r src *.json root@comntr.live:~/comntr.io"
   },
   "dependencies": {
     "@types/lru-cache": "^5.1.0",
