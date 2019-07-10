@@ -1,22 +1,42 @@
 const cp = require('child_process');
 const http = require('http');
 
-let port = 26581;
+const SRV_PORT = 26581;
+const SRV_DIRID = 37712;
 
-let srv = cp.spawn('node', [
-  'bin/http',
-  '-p', port,
-  '-r', '/tmp/comntr/' + Math.random(),
-  '-z', 1024,
-]);
+let srv = {};
 
-srv.stdout.on('data', (data) => log.cp(srv.pid, data + ''));
-srv.stderr.on('data', (data) => log.cp(srv.pid, data + ''));
+srv.procs = {};
+
+srv.start = async () => {
+  log.i('Starting the server.');
+
+  let srvp = cp.spawn('node', [
+    'bin/http',
+    '-p', SRV_PORT,
+    '-r', '/tmp/comntr/' + SRV_DIRID,
+    '-z', 1024,
+  ]);
+
+  srv.procs[srvp.pid] = srvp;
+
+  srvp.stdout.on('data', (data) => log.cp(srvp.pid, data + ''));
+  srvp.stderr.on('data', (data) => log.cp(srvp.pid, data + ''));
+
+  await log.waitFor('I Listening on port ' + SRV_PORT, srvp.pid);
+};
+
+srv.stop = () => {
+  log.i('Stopping the server.');
+  for (let pid in srv.procs)
+    srv.procs[pid].kill();
+  srv.procs = {};
+};
 
 process.on('SIGINT', () => exit(1));
 
 function exit(code = 0) {
-  srv.kill();
+  srv.stop();
   process.exit(code);
 }
 
@@ -40,7 +60,7 @@ log.cp = (pid, text) => {
       log(pid, '::', line);
 
     for (let listener of log.listeners)
-      listener(line);
+      listener(line, pid);
   }
 };
 
@@ -53,9 +73,10 @@ function isLogExcluded(line) {
 
 log.cp.excluded = [];
 
-log.waitFor = pattern => new Promise(resolve => {
+log.waitFor = (pattern, pid) => new Promise(resolve => {
   log.i('Waiting for the srv log:', JSON.stringify(pattern));
-  log.listeners.push(function listener(line = '') {
+  log.listeners.push(function listener(line = '', srvpid) {
+    if (pid && pid != srvpid) return;
     if (line.indexOf(pattern) < 0) return;
     log.i('Detected the srv log:', JSON.stringify(pattern));
     let i = log.listeners.indexOf(listener);
@@ -64,11 +85,9 @@ log.waitFor = pattern => new Promise(resolve => {
   });
 });
 
-let srvReady = log.waitFor('I Listening on port ' + port);
-
 async function runTest(test) {
   try {
-    await srvReady;
+    await srv.start();
     let time = Date.now();
     await test();
     log.i(Date.now() - time, 'ms');
@@ -88,7 +107,7 @@ function fetch(method, path, { body, json, headers = {} } = {}) {
 
   let options = {
     host: '127.0.0.1',
-    port: port,
+    port: SRV_PORT,
     path: path,
     method: method,
     headers: {
@@ -126,5 +145,6 @@ fetch.logs = false;
 module.exports = {
   runTest,
   log,
+  srv,
   fetch,
 };
