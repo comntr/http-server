@@ -10,9 +10,10 @@ import { log } from './log';
 import { BadRequest, HttpError } from './errors';
 import { registerHandler, executeHandler } from './handlers/http-handler';
 import * as storage from './storage';
+import * as qps from './qps';
 import './handlers/room-rules';
 import './handlers/comments';
-import * as qps from './qps';
+import './handlers/root';
 
 const URL_RPC_COMMENTS_COUNT = /^\/rpc\/GetCommentsCount$/;
 const URL_GET_STATS_QPS = /^\/stats\/qps\/(\w+)$/;
@@ -41,20 +42,10 @@ if (minGZipRspSize > 0) {
 
 storage.initStorage(cmdargs.root);
 
-registerHandler('GET', '/', handleGetRoot);
 registerHandler('GET', URL_GET_STATS_QPS, handleGetStatsQps);
 registerHandler('POST', URL_RPC_COMMENTS_COUNT, handleGetCommentsCount);
 registerHandler('OPTIONS', /^\/.*$/, handleCorsPreflight);
 log.i('All HTTP handlers registered.');
-
-// Returns a dummy message to see that the server is alive.
-//
-// GET /
-// HTTP 200
-//
-function handleGetRoot(): Rsp {
-  return { text: 'You have reached the comntr server.' };
-}
 
 // Handles the CORS preflight request.
 //

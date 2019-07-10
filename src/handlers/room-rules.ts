@@ -4,12 +4,8 @@
 //    POST /<t-hash>/rules
 //
 
-import * as fs from 'fs';
 import * as http from 'http';
-import * as path from 'path';
-
 import * as sha1 from 'sha1';
-import mkdirp = require('mkdirp');
 
 import { getSupercop } from '../ed25519';
 import * as storage from '../storage';

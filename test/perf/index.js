@@ -1,67 +1,25 @@
-const cp = require('child_process');
-const http = require('http');
+const { runTest, log, fetch } = require('../fw');
 const sha1 = require('sha1');
-
-let runid = Math.random().toString(16).slice(2);
-let port = 55271;
 
 let ntopics = 250;
 let ncomments = 25;
 let ngetcomments = 1e3;
 let nmaxreqs = 50;
 
-let srv = cp.spawn('node', [
-  'bin/http',
-  '-p', port,
-  '-r', '/tmp/comntr/' + runid,
-  '-z', 1024,
-]);
+log.cp.excluded.push(/\sI\s/);
 
-srv.stdout.on('data', (data) => !/\sI\s/.test(data) && log.cp(srv.pid, data + ''));
-srv.stderr.on('data', (data) => log.cp(srv.pid, data + ''));
+runTest(async () => {
+  log.i('Adding comments.');
+  log.i('# of topics:', ntopics);
+  log.i('# of comments:', ncomments);
+  log.i('# max outstanding requests:', nmaxreqs);
+  await measure(addRandomComment, ntopics * ncomments);
 
-process.on('SIGINT', exit);
-
-function exit() {
-  srv.kill();
-  process.exit();
-}
-
-function log(...args) {
-  console.log(...args);
-}
-
-log.i = (...args) => log('I', ...args);
-log.d = (...args) => log('D', ...args);
-
-log.cp = (pid, text) => {
-  let lines = text.split(/\r?\n/g);
-  for (let line of lines)
-    if (line.trim())
-      log(pid, '::', line.trim());
-};
-
-setTimeout(async () => {
-  try {
-    log.i('Starting the test.');
-
-    log.i('Adding comments.');
-    log.i('# of topics:', ntopics);
-    log.i('# of comments:', ncomments);
-    log.i('# max outstanding requests:', nmaxreqs);
-    await measure(addRandomComment, ntopics * ncomments);
-    
-    log.i('Getting comments.');
-    log.i('# of gets:', ngetcomments);
-    log.i('# max outstanding requests:', nmaxreqs);
-    await measure(getRandomComments, ngetcomments);
-  } catch (err) {
-    log.i(err);
-  } finally {
-    log.i('Ending the test.');
-    exit();
-  }
-}, 2500);
+  log.i('Getting comments.');
+  log.i('# of gets:', ngetcomments);
+  log.i('# max outstanding requests:', nmaxreqs);
+  await measure(getRandomComments, ngetcomments);
+});
 
 async function measure(sendreq, total) {
   let time = Date.now();
@@ -125,43 +83,4 @@ async function addRandomComment() {
   let res = await fetch('POST', '/' + thash + '/' + chash, { body });
   if (res.statusCode != 201)
     throw new Error(res.statusCode + ' ' + res.statusMessage);
-}
-
-function fetch(method, path, { body, json, headers = {} } = {}) {
-  if (json) {
-    body = JSON.stringify(json);
-    headers['Content-Type'] = 'application/json';
-  }
-
-  let options = {
-    host: '127.0.0.1',
-    port: port,
-    path: path,
-    method: method,
-    headers: {
-      'Content-Length': body ? Buffer.byteLength(body) : 0,
-      ...headers,
-    }
-  };
-
-  return new Promise((resolve, reject) => {
-    let req = http.request(options, res => {
-      let rsp = {
-        statusCode: res.statusCode,
-        statusMessage: res.statusMessage,
-        body: '',
-      };
-      res.setEncoding('utf8');
-      res.on('data', (data) => rsp.body += data);
-      res.on('end', () => {
-        // log.i('<-', rsp.statusCode, rsp.statusMessage, rsp.body);
-        resolve(rsp);
-      });
-      res.on('error', reject);
-    });
-
-    if (body) req.write(body);
-    req.end();
-    // log.i('->', method, path);
-  });
 }
