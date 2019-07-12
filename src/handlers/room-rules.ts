@@ -14,6 +14,7 @@ import { log } from '../log';
 import { Rsp } from '../rsp';
 import { hex2bin } from '../hash-util';
 import { HttpHandler, HttpMethod } from './http-handler';
+import { downloadRequestBody } from '../http-util';
 
 const URL_RULES_REGEX = /^[/]([0-9a-f]{40})[/]rules$/;
 const H_FILTER_TAG = 'X-Tag';
@@ -37,7 +38,7 @@ class RoomRulesHandler {
     let ftag = req.headers[H_FILTER_TAG.toLowerCase()] as string;
     let pubkey = req.headers[H_PUBKEY.toLowerCase()] as string;
     let signature = req.headers[H_SIGNATURE.toLowerCase()] as string;
-    let newRules = await storage.downloadRequestBody(req);
+    let newRules = await downloadRequestBody(req);
     await verifyJson(newRules);
     await verifySignature(newRules, thash, ftag, pubkey, signature);
     await verifyCanSetRules(thash, pubkey);

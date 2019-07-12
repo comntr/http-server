@@ -4,6 +4,7 @@ import { HttpHandler, HttpMethod } from './http-handler';
 import * as storage from '../storage';
 import * as qps from '../qps';
 import { log } from '../log';
+import { downloadRequestBody } from '../http-util';
 
 @HttpHandler('/rpc/GetCommentsCount')
 class CommentsCountHandler {
@@ -18,7 +19,7 @@ class CommentsCountHandler {
   @HttpMethod('POST')
   async get(req: http.IncomingMessage): Promise<Rsp> {
     qps.nget.send();
-    let reqBody = await storage.downloadRequestBody(req);
+    let reqBody = await downloadRequestBody(req);
     let topics = JSON.parse(reqBody);
 
     if (topics.length > 1)

@@ -17,6 +17,7 @@ import { log } from '../log';
 import { Rsp } from '../rsp';
 import * as qps from '../qps';
 import { HttpHandler, HttpMethod } from './http-handler';
+import { downloadRequestBody } from '../http-util';
 
 const VALID_COMMENT_TEXT = /^\S[\x01-\x7F]+\S$/; // ASCII only, for now
 const VALID_COMMENT_HEADER = /^\w+(-\w+)*: \S+$/;
@@ -104,7 +105,7 @@ class CommentsHandler {
   async add(req: http.IncomingMessage): Promise<Rsp> {
     qps.cadd.send();
     let [, topicHash, commentHash] = req.url.split('/');
-    let commentBody = await storage.downloadRequestBody(req);
+    let commentBody = await downloadRequestBody(req);
     let actualCommentHash = sha1(commentBody);
 
     if (!commentHash) {
