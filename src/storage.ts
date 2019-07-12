@@ -12,19 +12,25 @@ const LRU_COMMENT_CACHE_SIZE = 1e4;
 const LRU_GET_CACHE_SIZE = 1e2;
 const SHA1_PATTERN = /^[0-9a-f]{40}$/;
 const RULES_FILENAME = '.rules';
+const DEFAULT_TDIR_PATTERN = [3, 3]; // /d34/2bf/2213..., 4096 x 4096 x N/16M
 
-let dataDir = '';
+let config = {
+  tdirBase: '',
+  tdirPattern: [],
+};
 
 export const cachedTopics = new LRU<string, string[]>(LRU_DIR_CACHE_SIZE); // topic sha1 -> comment sha1s
 export const cachedXorHashes = new LRU<string, string>(LRU_DIR_CACHE_SIZE); // topic sha1 -> xor of comment sha1s
 export const cachedComments = new LRU<string, string>(LRU_COMMENT_CACHE_SIZE); // comment sha1 -> comment
 export const cachedGets = new LRU<string, Rsp>(LRU_GET_CACHE_SIZE); // GET url -> rsp
 
-export function initStorage(dir: string) {
-  dataDir = path.resolve(dir);
-  log.i('Data dir:', dataDir);
-  if (!fs.existsSync(dataDir))
-    mkdirp.sync(dataDir);
+export function initStorage(dir: string, pattern: number[]) {
+  config.tdirBase = path.resolve(dir);
+  config.tdirPattern = pattern || DEFAULT_TDIR_PATTERN;
+  log.i('Data dir:', config.tdirBase);
+  log.i('Pattern:', config.tdirPattern);
+  if (!fs.existsSync(config.tdirBase))
+    mkdirp.sync(config.tdirBase);
 }
 
 /** Returns null if there are no rules. */
@@ -50,7 +56,14 @@ export function getCommentFilePath(thash: string, chash: string) {
 }
 
 export function getTopicDir(thash: string) {
-  return path.join(dataDir, thash);
+  let parts = [], ibase = 0;
+  for (let n of config.tdirPattern) {
+    let part = thash.slice(ibase, ibase + n);
+    parts.push(part);
+    ibase += n;
+  }
+  parts.push(thash.slice(ibase));
+  return path.join(config.tdirBase, ...parts);
 }
 
 export function getFilenames(topicId) {

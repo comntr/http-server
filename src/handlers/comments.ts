@@ -8,6 +8,7 @@ import * as fs from 'fs';
 import * as http from 'http';
 import * as path from 'path';
 import * as sha1 from 'sha1';
+import * as mkdirp from 'mkdirp';
 
 import { getSupercop } from '../ed25519'
 import * as storage from '../storage';
@@ -134,8 +135,8 @@ class CommentsHandler {
     }
 
     if (!fs.existsSync(topicDir)) {
-      log.i('+ topic /' + topicHash);
-      fs.mkdirSync(topicDir);
+      log.v('mkdir -p', topicDir);
+      mkdirp.sync(topicDir);
     }
 
     log.i('Adding comment:',

@@ -2,7 +2,7 @@ const cp = require('child_process');
 const http = require('http');
 
 const SRV_PORT = 26581;
-const SRV_DIRID = 37712;
+const SRV_DIRID = 'qwerty';
 const BASE_TMPDIR = '/tmp/comntr';
 
 let srv = {};

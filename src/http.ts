@@ -27,12 +27,13 @@ log('>', process.argv.join(' '));
 cmdargs
   .option('-p, --port <n>', 'HTTP port.', parseInt)
   .option('-r, --root <s>', 'Dir with the comments data.')
+  .option('-t, --tdirp <j>', 'e.g. [2,4] turns thash into /4f/67f0/27aa...')
   .option('-z, --gzip <n>', 'GZips responses bigger than <n> bytes.')
   .option('-v, --verbose', 'Verbose logging.')
   .parse(process.argv);
 
-log.i('Verbose logging?', cmdargs.verbose);
-log.verbose = cmdargs.verbose;
+log.verbose = cmdargs.verbose || false;
+log.i('Verbose logging?', log.verbose);
 
 const minGZipRspSize = cmdargs.gzip;
 if (minGZipRspSize > 0) {
@@ -41,7 +42,9 @@ if (minGZipRspSize > 0) {
   log.i('GZip disabled.');
 }
 
-storage.initStorage(cmdargs.root);
+storage.initStorage(
+  cmdargs.root,
+  cmdargs.tdirp && JSON.parse(cmdargs.tdirp));
 
 async function handleHttpRequest(req: http.IncomingMessage, res: http.ServerResponse) {
   let htime = Date.now();
