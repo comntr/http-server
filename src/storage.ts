@@ -28,7 +28,7 @@ export function initStorage(dir: string, pattern: number[]) {
   config.tdirBase = path.resolve(dir);
   config.tdirPattern = pattern || DEFAULT_TDIR_PATTERN;
   log.i('Data dir:', config.tdirBase);
-  log.i('Pattern:', config.tdirPattern);
+  log.i('Data dir pattern:', config.tdirPattern);
   if (!fs.existsSync(config.tdirBase))
     mkdirp.sync(config.tdirBase);
 }

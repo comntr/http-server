@@ -39,7 +39,7 @@ export function registerHandler(
   handler: HandlerFn) {
 
   handlers.push({ method, url, handler });
-  log.i('Registered handler:', method, url);
+  log.v('Registered handler:', method, url);
 }
 
 export function HttpHandler(urlPattern: UrlPattern) {
