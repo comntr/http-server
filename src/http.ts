@@ -5,19 +5,19 @@ import * as zlib from 'zlib';
 import * as fs from 'fs';
 import * as cmdargs from 'commander';
 
-import { Rsp } from './rsp';
 import { log } from './log';
-import { BadRequest, HttpError } from './errors';
-import { registerHandler, executeHandler } from './handlers/http-handler';
+import { HttpError } from './errors';
+import { executeHandler } from './handlers/http-handler';
 import * as storage from './storage';
 import * as qps from './qps';
+
 import './handlers/cors-preflight';
 import './handlers/comments-count';
+import './handlers/stats-qps';
 import './handlers/room-rules';
 import './handlers/comments';
 import './handlers/root';
 
-const URL_GET_STATS_QPS = /^\/stats\/qps\/(\w+)$/;
 const CERT_DIR = '/etc/letsencrypt/archive/comntr.live/';
 const CERT_KEY_FILE = 'privkey1.pem';
 const CERT_FILE = 'cert1.pem';
@@ -42,18 +42,6 @@ if (minGZipRspSize > 0) {
 }
 
 storage.initStorage(cmdargs.root);
-
-registerHandler('GET', URL_GET_STATS_QPS, handleGetStatsQps);
-log.i('All HTTP handlers registered.');
-
-// Returns JSON with stats.
-function handleGetStatsQps(req: http.IncomingMessage): Rsp {
-  let [, qpsname] = URL_GET_STATS_QPS.exec(req.url);
-  let counter = qps[qpsname];
-  if (!counter) throw new BadRequest('No Such Stat');
-  let json = counter.json;
-  return { json };
-}
 
 async function handleHttpRequest(req: http.IncomingMessage, res: http.ServerResponse) {
   let htime = Date.now();
