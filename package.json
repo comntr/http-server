@@ -3,7 +3,7 @@
     "start": "npm i; npm run build; npm run http",
     "clean": "rm -rf ./bin",
     "build": "npm run clean; node_modules/.bin/tsc",
-    "http": "sudo node bin/http -p 42751 -r /var/lib/comntr -z 1024",
+    "http": "sudo node bin/http -p 42751 -r /var/lib/comntr/data -z 1024",
     "test-perf": "npm run build; rm -r /tmp/comntr; node test/perf; du -sh /tmp/comntr",
     "test": "npm run build; node test/func",
     "scp-push": "scp -r tools src *.json root@comntr.live:~/comntr.io"
