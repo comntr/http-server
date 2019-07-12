@@ -12,11 +12,11 @@ import { registerHandler, executeHandler } from './handlers/http-handler';
 import * as storage from './storage';
 import * as qps from './qps';
 import './handlers/cors-preflight';
+import './handlers/comments-count';
 import './handlers/room-rules';
 import './handlers/comments';
 import './handlers/root';
 
-const URL_RPC_COMMENTS_COUNT = /^\/rpc\/GetCommentsCount$/;
 const URL_GET_STATS_QPS = /^\/stats\/qps\/(\w+)$/;
 const CERT_DIR = '/etc/letsencrypt/archive/comntr.live/';
 const CERT_KEY_FILE = 'privkey1.pem';
@@ -44,7 +44,6 @@ if (minGZipRspSize > 0) {
 storage.initStorage(cmdargs.root);
 
 registerHandler('GET', URL_GET_STATS_QPS, handleGetStatsQps);
-registerHandler('POST', URL_RPC_COMMENTS_COUNT, handleGetCommentsCount);
 log.i('All HTTP handlers registered.');
 
 // Returns JSON with stats.
@@ -54,29 +53,6 @@ function handleGetStatsQps(req: http.IncomingMessage): Rsp {
   if (!counter) throw new BadRequest('No Such Stat');
   let json = counter.json;
   return { json };
-}
-
-// Returns the number of comments in a topic.
-//
-// POST /rpc/GetCommentsCount
-// [<sha1>, <sha1>, ...]
-// HTTP 200
-// [34, 2, ...]
-//
-async function handleGetCommentsCount(req: http.IncomingMessage): Promise<Rsp> {
-  qps.nget.send();
-  let reqBody = await storage.downloadRequestBody(req);
-  let topics = JSON.parse(reqBody);
-
-  if (topics.length > 1)
-    log.i('Topics:', topics.length);
-
-  let counts = topics.map(topicHash => {
-    let filenames = storage.getFilenames(topicHash);
-    return filenames.length;
-  });
-
-  return { json: counts };
 }
 
 async function handleHttpRequest(req: http.IncomingMessage, res: http.ServerResponse) {

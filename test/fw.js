@@ -137,7 +137,8 @@ function fetch(method, path, { body, json, headers = {} } = {}) {
 
     if (body) req.write(body);
     req.end();
-    fetch.logs && log.i('->', method, path);
+    fetch.logs && log.i('->', method, path,
+      JSON.stringify(body));
   });
 }
 
