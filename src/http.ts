@@ -11,6 +11,7 @@ import { BadRequest, HttpError } from './errors';
 import { registerHandler, executeHandler } from './handlers/http-handler';
 import * as storage from './storage';
 import * as qps from './qps';
+import './handlers/cors-preflight';
 import './handlers/room-rules';
 import './handlers/comments';
 import './handlers/root';
@@ -44,26 +45,7 @@ storage.initStorage(cmdargs.root);
 
 registerHandler('GET', URL_GET_STATS_QPS, handleGetStatsQps);
 registerHandler('POST', URL_RPC_COMMENTS_COUNT, handleGetCommentsCount);
-registerHandler('OPTIONS', /^\/.*$/, handleCorsPreflight);
 log.i('All HTTP handlers registered.');
-
-// Handles the CORS preflight request.
-//
-// OPTIONS /<sha1>/...
-// HTTP 200
-//
-function handleCorsPreflight(req: http.IncomingMessage): Rsp {
-  let method = req.headers['access-control-request-method'];
-  let headers = req.headers['access-control-request-headers'];
-
-  return {
-    headers: {
-      'Access-Control-Max-Age': '86400',
-      'Access-Control-Allow-Methods': method,
-      'Access-Control-Allow-Headers': headers,
-    }
-  };
-}
 
 // Returns JSON with stats.
 function handleGetStatsQps(req: http.IncomingMessage): Rsp {

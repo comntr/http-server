@@ -121,6 +121,7 @@ function fetch(method, path, { body, json, headers = {} } = {}) {
       let rsp = {
         statusCode: res.statusCode,
         statusMessage: res.statusMessage,
+        headers: res.headers,
         body: '',
       };
       res.setEncoding('utf8');

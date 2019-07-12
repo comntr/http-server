@@ -1,5 +1,4 @@
 node_modules/
-vps/
 bin/
 package-lock.json
 npm-debug.log
