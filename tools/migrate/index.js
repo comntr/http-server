@@ -1,7 +1,6 @@
 const fs = require('fs');
 const cp = require('child_process');
 const path = require('path');
-const mkdirp = require('mkdirp');
 
 const THASH_PATTERN = /^[\da-f]{40}$/;
 const TDIR_PARTS = [3, 3];
@@ -35,7 +34,7 @@ for (let thash of fs.readdirSync(confSrcDir)) {
   log(thash);
   let srcDir = path.join(confSrcDir, thash);
   let newDir = makeNewDirPath(confResDir, thash);
-  mkdirp.sync(newDir);
+  exec('mkdir -p ' + newDir);
   exec('cp -r ' + srcDir + '/* ' + newDir);
   cmpDirs(srcDir, newDir);
 }
