@@ -34,17 +34,17 @@ class CommentsHandler {
     let [, topicHash, commentHash] = req.url.split('/');
     if (commentHash) throw new BadRequest;
 
-    let topicDir = storage.getTopicDir(topicHash);
+    let tdir = storage.getTopicDir(topicHash);
     log.i('Loading comments:', topicHash.slice(0, 8));
 
-    if (!fs.existsSync(topicDir)) {
+    if (!fs.existsSync(tdir)) {
       log.i('No such topic.');
       return { json: {} };
     }
 
     let time = Date.now();
     let filenames = storage.getFilenames(topicHash);
-    log.i('fs.readdir:', Date.now() - time, 'ms');
+    log.i('fs.readdirSync:', Date.now() - time, 'ms');
 
     let time3 = Date.now();
     let serverXorHash = storage.getTopicXorHash(topicHash);
@@ -69,13 +69,14 @@ class CommentsHandler {
     let time2 = Date.now();
     let comments = [];
 
-    for (let hash of filenames) {
-      let text = storage.cachedComments.get(hash);
+    for (let chash of filenames) {
+      let text = storage.cachedComments.get(chash);
 
       if (!text) {
-        let filepath = path.join(topicDir, hash);
+        let filepath = path.join(tdir, chash);
+        log.v('Missed LRU cache:', filepath);
         text = fs.readFileSync(filepath, 'utf8');
-        storage.cachedComments.set(hash, text);
+        storage.cachedComments.set(chash, text);
       }
 
       comments.push(text);
