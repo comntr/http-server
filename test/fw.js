@@ -3,10 +3,13 @@ const http = require('http');
 
 const SRV_PORT = 26581;
 const SRV_DIRID = 37712;
+const BASE_TMPDIR = '/tmp/comntr';
 
 let srv = {};
-
 srv.procs = {};
+
+log('rm -rf', BASE_TMPDIR);
+cp.execSync('rm -rf ' + BASE_TMPDIR);
 
 srv.start = async () => {
   log.i('Starting the server.');
@@ -14,7 +17,7 @@ srv.start = async () => {
   let srvp = cp.spawn('node', [
     'bin/http',
     '-p', SRV_PORT,
-    '-r', '/tmp/comntr/' + SRV_DIRID,
+    '-r', BASE_TMPDIR + '/' + SRV_DIRID,
     '-z', 1024,
   ]);
 

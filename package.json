@@ -5,7 +5,7 @@
     "build": "npm run clean; node_modules/.bin/tsc",
     "http": "sudo node bin/http -p 42751 -r /var/lib/comntr -z 1024",
     "test-perf": "rm -r /tmp/comntr; node test/perf; du -sh /tmp/comntr",
-    "test": "node test/func",
+    "test": "npm run build; node test/func",
     "scp-push": "scp -r src *.json root@comntr.live:~/comntr.io"
   },
   "dependencies": {
