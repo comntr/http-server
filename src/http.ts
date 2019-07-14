@@ -22,7 +22,9 @@ const CERT_DIR = '/etc/letsencrypt/archive/comntr.live/';
 const CERT_KEY_FILE = 'privkey1.pem';
 const CERT_FILE = 'cert1.pem';
 
-let nAllRequests = qps.register('all-requests');
+let nAllRequests = qps.register('http.all-requests');
+let statGZipCount = qps.register('http.gzip.count');
+let statGZipTime = qps.register('http.gzip.time', 'avg');
 
 log('>', process.argv.join(' '));
 
@@ -68,9 +70,12 @@ async function handleHttpRequest(req: http.IncomingMessage, res: http.ServerResp
       minGZipRspSize > 0 && rsp.body.length > minGZipRspSize;
 
     if (useGZip) {
+      statGZipCount.add();
       let gtime = Date.now();
       let gzipped = await gzipText(rsp.body as string);
-      log.i('gzip time:', Date.now() - gtime, 'ms');
+      gtime = Date.now() - gtime;
+      statGZipTime.add(gtime);
+      log.i('gzip time:', gtime, 'ms');
       rsp.body = gzipped;
       rsp.headers = {
         ...rsp.headers,

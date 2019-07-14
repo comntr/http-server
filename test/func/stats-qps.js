@@ -1,6 +1,6 @@
 const { runTest, fetch, log } = require('../fw');
 
-const QPS_ALL_REQUESTS = 'all-requests';
+const QPS_ALL_REQUESTS = 'http.all-requests';
 
 fetch.logs = true;
 log.cp.excluded.push(/\sI\s/);

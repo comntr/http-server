@@ -16,6 +16,7 @@ import { hex2bin } from '../hash-util';
 import { BadRequest, Unauthorized } from '../errors';
 import { log } from '../log';
 import { Rsp } from '../rsp';
+import * as qps from '../qps';
 import { HttpHandler, HttpMethod } from './http-handler';
 import { downloadRequestBody } from '../http-util';
 
@@ -24,6 +25,10 @@ const VALID_COMMENT_HEADER = /^\w+(-\w+)*: \S+$/;
 const H_SIGNATURE = /^Signature: (\w+)$/m;
 const H_PUBKEY = /^Public-Key: (\w+)$/m;
 const URL_COMMENTS = /^\/[0-9a-f]{40}(\/[0-9a-f]{40})?$/;
+
+let statReadFileCount = qps.register('comments.readfile.count');
+let statReadFileTime = qps.register('comments.readfile.time', 'avg');
+let statNewDirCount = qps.register('comments.mkdirp.count');
 
 @HttpHandler(URL_COMMENTS)
 class CommentsHandler {
@@ -42,7 +47,7 @@ class CommentsHandler {
 
     let time = Date.now();
     let filenames = storage.getFilenames(topicHash);
-    log.i('fs.readdirSync:', Date.now() - time, 'ms');
+    log.i('filenames:', Date.now() - time, 'ms');
 
     let time3 = Date.now();
     let serverXorHash = storage.getTopicXorHash(topicHash);
@@ -71,10 +76,13 @@ class CommentsHandler {
       let text = storage.cachedComments.get(chash);
 
       if (!text) {
+        statReadFileCount.add();
+        let time = Date.now();
         let filepath = path.join(tdir, chash);
         log.v('Missed LRU cache:', filepath);
         text = fs.readFileSync(filepath, 'utf8');
         storage.cachedComments.set(chash, text);
+        statReadFileTime.add(Date.now() - time);
       }
 
       comments.push(text);
@@ -133,6 +141,7 @@ class CommentsHandler {
     }
 
     if (!fs.existsSync(topicDir)) {
+      statNewDirCount.add();
       log.v('mkdir -p', topicDir);
       mkdirp.sync(topicDir);
     }
@@ -145,6 +154,7 @@ class CommentsHandler {
     storage.cachedTopics.del(topicHash);
     storage.cachedXorHashes.del(topicHash);
     fs.writeFileSync(commentFilePath, commentBody, 'utf8');
+
     return {
       statusCode: 201,
       statusMessage: 'Comment Added',

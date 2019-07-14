@@ -4,6 +4,7 @@ import * as mkdirp from 'mkdirp';
 import * as LRU from 'lru-cache';
 
 import * as hashutil from './hash-util';
+import * as qps from './qps';
 import { log } from './log';
 import { Rsp } from './rsp';
 
@@ -14,15 +15,33 @@ const SHA1_PATTERN = /^[0-9a-f]{40}$/;
 const RULES_FILENAME = '.rules';
 const DEFAULT_TDIR_PATTERN = [2, 2]; // /d3/2b/ab..f8, 256 x 256 x N/64K
 
+let statReadDirCount = qps.register('storage.readdir.count');
+let statReadDirTime = qps.register('storage.readdir.time', 'avg');
+
 let config = {
   tdirBase: '',
   tdirPattern: [],
 };
 
-export const cachedTopics = new LRU<string, string[]>(LRU_DIR_CACHE_SIZE); // topic sha1 -> comment sha1s
-export const cachedXorHashes = new LRU<string, string>(LRU_DIR_CACHE_SIZE); // topic sha1 -> xor of comment sha1s
-export const cachedComments = new LRU<string, string>(LRU_COMMENT_CACHE_SIZE); // comment sha1 -> comment
-export const cachedGets = new LRU<string, Rsp>(LRU_GET_CACHE_SIZE); // GET url -> rsp
+// topic sha1 -> comment sha1s
+export const cachedTopics =
+  new LRU<string, string[]>(
+    LRU_DIR_CACHE_SIZE);
+
+// topic sha1 -> xor of comment sha1s
+export const cachedXorHashes =
+  new LRU<string, string>(
+    LRU_DIR_CACHE_SIZE);
+
+// comment sha1 -> comment
+export const cachedComments =
+  new LRU<string, string>(
+    LRU_COMMENT_CACHE_SIZE);
+
+// GET url -> rsp
+export const cachedGets =
+  new LRU<string, Rsp>(
+    LRU_GET_CACHE_SIZE);
 
 export function initStorage(dir: string, pattern: number[]) {
   config.tdirBase = path.resolve(dir);
@@ -69,11 +88,14 @@ export function getTopicDir(thash: string) {
 export function getFilenames(topicId) {
   let filenames = cachedTopics.get(topicId);
   if (filenames) return filenames;
+  statReadDirCount.add();
+  let time = Date.now();
   let topicDir = getTopicDir(topicId);
   filenames = !fs.existsSync(topicDir) ? [] :
     fs.readdirSync(topicDir);
   filenames = filenames.filter(name => SHA1_PATTERN.test(name));
   cachedTopics.set(topicId, filenames);
+  statReadDirTime.add(Date.now() - time);
   return filenames;
 }
 

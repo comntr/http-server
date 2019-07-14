@@ -60,7 +60,7 @@ export function HttpHandler(urlPattern: UrlPattern) {
       log.i(target.name + '.' + methodName, 'handles',
         httpMethod, urlPattern);
 
-      let qpsNamePrefix = target.name + '.' + httpMethod;
+      let qpsNamePrefix = 'http.' + target.name + '.' + httpMethod;
       let nRequests = qps.register(qpsNamePrefix + '.reqs');
       let nReqErrors = qps.register(qpsNamePrefix + '.errs');
       let nReqTime = qps.register(qpsNamePrefix + '.time', 'avg');
