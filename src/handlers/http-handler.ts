@@ -1,6 +1,7 @@
 import * as http from 'http';
 import { log } from '../log';
 import { Rsp } from '../rsp';
+import * as qps from '../qps';
 
 type MethodSpec = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'OPTIONS';
 type UrlPattern = RegExp | string;
@@ -45,16 +46,39 @@ export function registerHandler(
 export function HttpHandler(urlPattern: UrlPattern) {
   log.v('HttpHandler()', urlPattern);
   let instance = null;
+
   return function decorate(target) {
     log.v('HttpHandler:decorate()', target);
+    if (!target.name)
+      throw new Error('@HttpHandler cannot be used with anon classes');
+
     let tags = httpMethodTags.get(target.prototype);
     if (!tags) throw new Error(
       '@HttpHandler cannot be used without @HttpMethod');
-    for (let [name, method] of tags) {
-      log.i(target.name + '.' + name, 'handles', method, urlPattern);
-      registerHandler(method, urlPattern, req => {
+
+    for (let [methodName, httpMethod] of tags) {
+      log.i(target.name + '.' + methodName, 'handles',
+        httpMethod, urlPattern);
+
+      let qpsNamePrefix = target.name + '.' + httpMethod;
+      let nRequests = qps.register(qpsNamePrefix);
+      let nReqErrors = qps.register(qpsNamePrefix + '.errs');
+      let nReqTime = qps.register(qpsNamePrefix + '.time');
+
+      registerHandler(httpMethod, urlPattern, async req => {
+        let time = Date.now();
         if (!instance) instance = new target;
-        return instance[name](req);
+
+        try {
+          nRequests.add();
+          let res = await instance[methodName](req);
+          return res;
+        } catch (err) {
+          nReqErrors.add();
+          throw err;
+        } finally {
+          nReqTime.add(Date.now() - time);
+        }
       });
     }
   };

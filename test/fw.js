@@ -131,8 +131,9 @@ function fetch(method, path, { body, json, headers = {} } = {}) {
       res.on('data', (data) => rsp.body += data);
       res.on('end', () => {
         fetch.logs && log.i('<-', rsp.statusCode,
-          rsp.statusMessage,
-          JSON.stringify(rsp.body));
+          rsp.statusMessage);
+        fetch.logs && fetch.logbody &&
+          log.i(JSON.stringify(rsp.body));
         resolve(rsp);
       });
       res.on('error', reject);
@@ -140,12 +141,14 @@ function fetch(method, path, { body, json, headers = {} } = {}) {
 
     if (body) req.write(body);
     req.end();
-    fetch.logs && log.i('->', method, path,
-      JSON.stringify(body));
+    fetch.logs && log.i('->', method, path);
+    fetch.logs && fetch.logbody &&
+      log.i(JSON.stringify(body));
   });
 }
 
 fetch.logs = false;
+fetch.logbody = false;
 
 module.exports = {
   runTest,

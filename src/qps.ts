@@ -6,7 +6,7 @@ class QPSMeter {
     this.nreqs = new Uint32Array(this.wsize);
   }
 
-  send(stime = Date.now() / 1000 | 0) {
+  add(delta = 1, stime = Date.now() / 1000 | 0) {
     let index = stime % this.wsize;
 
     if (this.tprev) {
@@ -15,7 +15,7 @@ class QPSMeter {
         this.nreqs[(index - i) % this.wsize] = 0;
     }
 
-    this.nreqs[index]++;
+    this.nreqs[index] += delta;
     this.tprev = stime;
   }
 
@@ -24,9 +24,13 @@ class QPSMeter {
   }
 }
 
-export default QPSMeter;
+export const counters = new Map<string, QPSMeter>();
 
-export const http = new QPSMeter;
-export const cget = new QPSMeter;
-export const cadd = new QPSMeter;
-export const nget = new QPSMeter;
+export function register(name: string): QPSMeter {
+  if (counters.get(name))
+    return counters.get(name);
+
+  let counter = new QPSMeter;
+  counters.set(name, counter);
+  return counter;
+}

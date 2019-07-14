@@ -22,6 +22,8 @@ const CERT_DIR = '/etc/letsencrypt/archive/comntr.live/';
 const CERT_KEY_FILE = 'privkey1.pem';
 const CERT_FILE = 'cert1.pem';
 
+let nAllRequests = qps.register('all-requests');
+
 log('>', process.argv.join(' '));
 
 cmdargs
@@ -35,7 +37,7 @@ cmdargs
 log.verbose = cmdargs.verbose || false;
 log.i('Verbose logging?', log.verbose);
 
-const minGZipRspSize = cmdargs.gzip;
+let minGZipRspSize = cmdargs.gzip;
 if (minGZipRspSize > 0) {
   log.i('Min gzip response size:', (minGZipRspSize / 1024).toFixed(1), 'KB');
 } else {
@@ -49,7 +51,7 @@ storage.initStorage(
 async function handleHttpRequest(req: http.IncomingMessage, res: http.ServerResponse) {
   let htime = Date.now();
   log.v(req.method, req.url);
-  qps.http.send();
+  nAllRequests.add();
   res.setHeader('Access-Control-Allow-Origin', '*');
 
   try {

@@ -18,7 +18,6 @@ class CommentsCountHandler {
   //
   @HttpMethod('POST')
   async get(req: http.IncomingMessage): Promise<Rsp> {
-    qps.nget.send();
     let reqBody = await downloadRequestBody(req);
     let topics = JSON.parse(reqBody);
 

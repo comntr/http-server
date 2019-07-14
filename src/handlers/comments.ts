@@ -16,7 +16,6 @@ import { hex2bin } from '../hash-util';
 import { BadRequest, Unauthorized } from '../errors';
 import { log } from '../log';
 import { Rsp } from '../rsp';
-import * as qps from '../qps';
 import { HttpHandler, HttpMethod } from './http-handler';
 import { downloadRequestBody } from '../http-util';
 
@@ -30,7 +29,6 @@ const URL_COMMENTS = /^\/[0-9a-f]{40}(\/[0-9a-f]{40})?$/;
 class CommentsHandler {
   @HttpMethod('GET')
   async get(req: http.IncomingMessage): Promise<Rsp> {
-    qps.cget.send();
     let [, topicHash, commentHash] = req.url.split('/');
     if (commentHash) throw new BadRequest;
 
@@ -105,7 +103,6 @@ class CommentsHandler {
 
   @HttpMethod('POST')
   async add(req: http.IncomingMessage): Promise<Rsp> {
-    qps.cadd.send();
     let [, topicHash, commentHash] = req.url.split('/');
     let commentBody = await downloadRequestBody(req);
     let actualCommentHash = sha1(commentBody);
