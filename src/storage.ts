@@ -15,7 +15,7 @@ const SHA1_PATTERN = /^[0-9a-f]{40}$/;
 const RULES_FILENAME = '.rules';
 const DEFAULT_TDIR_PATTERN = [2, 2]; // /d3/2b/ab..f8, 256 x 256 x N/64K
 
-let statReadDirCount = qps.register('storage.readdir.count');
+let statReadDirCount = qps.register('storage.readdir.count', 'qps');
 let statReadDirTime = qps.register('storage.readdir.time', 'avg');
 
 let config = {

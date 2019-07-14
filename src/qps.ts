@@ -1,3 +1,5 @@
+const PREC = 100;
+
 interface AggVal {
   push(value: number): void;
   reset(): void;
@@ -39,19 +41,35 @@ class AvgAgg implements AggVal {
   }
 }
 
-class QPSMeter {
-  values: AggVal[] = [];
-  tprev = 0;
+class QpsAgg implements AggVal {
+  private sum = 0;
 
-  constructor(agg = 'sum', private wsize = 3600) {
-    let AV = aggregators[agg];
-    if (!AV) throw new Error('Unknown aggregator: ' + agg);
-    this.values = new Array(wsize);
-    for (let i = 0; i < wsize; i++)
-      this.values[i] = new AV;
+  push(value) {
+    this.sum += value;
   }
 
-  add(delta = 1, stime = Date.now() / 1000 | 0) {
+  reset() {
+    this.sum = 0;
+  }
+
+  value() {
+    return this.sum / 60;
+  }
+}
+
+class QPSMeter {
+  valpm: AggVal[] = [];
+  tprev = 0;
+
+  constructor(agg = 'sum', private wsize = 24 * 60) {
+    let AV = aggregators[agg];
+    if (!AV) throw new Error('Unknown aggregator: ' + agg);
+    this.valpm = new Array(wsize);
+    for (let i = 0; i < wsize; i++)
+      this.valpm[i] = new AV;
+  }
+
+  add(delta = 1, stime = Date.now() / 1000 / 60 | 0) {
     let index = stime % this.wsize;
 
     if (this.tprev) {
@@ -59,16 +77,17 @@ class QPSMeter {
       for (let i = 0; i < n && i < this.wsize; i++) {
         let vi = (index - i) % this.wsize;
         if (vi < 0) vi += this.wsize;
-        this.values[vi].reset();
+        this.valpm[vi].reset();
       }
     }
 
-    this.values[index].push(delta);
+    this.valpm[index].push(delta);
     this.tprev = stime;
   }
 
   get json(): [number, number[]] {
-    let values = this.values.map(av => av.value());
+    let values = this.valpm
+      .map(av => (PREC * av.value() | 0) / PREC);
     return [this.tprev, values];
   }
 }
@@ -76,11 +95,12 @@ class QPSMeter {
 export const aggregators = {
   sum: SumAgg,
   avg: AvgAgg,
+  qps: QpsAgg,
 };
 
 export const counters = new Map<string, QPSMeter>();
 
-export function register(name: string, agg = 'sum'): QPSMeter {
+export function register(name: string, agg: string): QPSMeter {
   if (counters.get(name))
     return counters.get(name);
 

@@ -22,7 +22,7 @@ runTest(async () => {
     let [stime, values] = json[name];
     if (!Number.isFinite(stime) || stime < 0)
       throw new Error('Invalid stime: ' + name + '; ' + stime);
-    if (!Array.isArray(values) || values.length != 3600)
+    if (!Array.isArray(values) || values.length != 24 * 60)
       throw new Error('Invalid values array: ' + name);
     for (let val of values)
       if (!Number.isFinite(val) || val < 0)

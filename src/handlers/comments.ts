@@ -26,9 +26,9 @@ const H_SIGNATURE = /^Signature: (\w+)$/m;
 const H_PUBKEY = /^Public-Key: (\w+)$/m;
 const URL_COMMENTS = /^\/[0-9a-f]{40}(\/[0-9a-f]{40})?$/;
 
-let statReadFileCount = qps.register('comments.readfile.count');
+let statReadFileCount = qps.register('comments.readfile.count', 'qps');
 let statReadFileTime = qps.register('comments.readfile.time', 'avg');
-let statNewDirCount = qps.register('comments.mkdirp.count');
+let statNewDirCount = qps.register('comments.mkdirp.count', 'qps');
 
 @HttpHandler(URL_COMMENTS)
 class CommentsHandler {

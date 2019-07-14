@@ -1,12 +1,13 @@
 {
   "scripts": {
-    "start": "npm i; npm run build; npm run http",
+    "start": "npm i; npm run build; mkdir -p /var/log/comntr; npm run http | tee /var/log/comntr/1.log",
     "clean": "rm -rf ./bin",
     "build": "npm run clean; node_modules/.bin/tsc",
     "http": "sudo node bin/http -p 42751 -r /var/lib/comntr/data -z 1024",
     "test-perf": "npm run build; rm -r /tmp/comntr; node test/perf; du -sh /tmp/comntr",
     "test": "npm run build; node test/func",
-    "scp-push": "scp -r tools src *.json root@comntr.live:~/comntr.io"
+    "ssh-logs": "ssh root@comntr.live 'pgrep node; cat /var/log/comntr/1.log'",
+    "ssh-push": "scp -r tools src *.json root@comntr.live:~/comntr.io"
   },
   "dependencies": {
     "@types/lru-cache": "^5.1.0",

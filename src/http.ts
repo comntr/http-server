@@ -22,8 +22,8 @@ const CERT_DIR = '/etc/letsencrypt/archive/comntr.live/';
 const CERT_KEY_FILE = 'privkey1.pem';
 const CERT_FILE = 'cert1.pem';
 
-let nAllRequests = qps.register('http.all-requests');
-let statGZipCount = qps.register('http.gzip.count');
+let nAllRequests = qps.register('http.all-requests', 'qps');
+let statGZipCount = qps.register('http.gzip.count', 'qps');
 let statGZipTime = qps.register('http.gzip.time', 'avg');
 
 log('>', process.argv.join(' '));
