@@ -12,7 +12,7 @@ const LRU_COMMENT_CACHE_SIZE = 1e4;
 const LRU_GET_CACHE_SIZE = 1e2;
 const SHA1_PATTERN = /^[0-9a-f]{40}$/;
 const RULES_FILENAME = '.rules';
-const DEFAULT_TDIR_PATTERN = [3, 3]; // /d34/2bf/2213..., 4096 x 4096 x N/16M
+const DEFAULT_TDIR_PATTERN = [2, 2]; // /d3/2b/ab..f8, 256 x 256 x N/64K
 
 let config = {
   tdirBase: '',
