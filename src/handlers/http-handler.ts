@@ -61,9 +61,9 @@ export function HttpHandler(urlPattern: UrlPattern) {
         httpMethod, urlPattern);
 
       let qpsNamePrefix = target.name + '.' + httpMethod;
-      let nRequests = qps.register(qpsNamePrefix);
+      let nRequests = qps.register(qpsNamePrefix + '.reqs');
       let nReqErrors = qps.register(qpsNamePrefix + '.errs');
-      let nReqTime = qps.register(qpsNamePrefix + '.time');
+      let nReqTime = qps.register(qpsNamePrefix + '.time', 'avg');
 
       registerHandler(httpMethod, urlPattern, async req => {
         let time = Date.now();
