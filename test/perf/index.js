@@ -1,24 +1,22 @@
 const { runTest, log, fetch } = require('../fw');
 const sha1 = require('sha1');
 
-let ntopics = 250;
-let ncomments = 25;
-let ngetcomments = 1e3;
-let nmaxreqs = 50;
+const N_TOPICS = 250;
+const N_COMMENTS = 75;
+const N_GETS = 1500;
+const N_MAXREQS = 25;
 
 log.cp.excluded.push(/\sI\s/);
 
 runTest(async () => {
   log.i('Adding comments.');
-  log.i('# of topics:', ntopics);
-  log.i('# of comments:', ncomments);
-  log.i('# max outstanding requests:', nmaxreqs);
-  await measure(addRandomComment, ntopics * ncomments);
+  await measure(addRandomComment, N_TOPICS * N_COMMENTS);
 
-  log.i('Getting comments.');
-  log.i('# of gets:', ngetcomments);
-  log.i('# max outstanding requests:', nmaxreqs);
-  await measure(getRandomComments, ngetcomments);
+  log.i('Getting comments for the same topic.');
+  await measure(getSameComments, N_GETS);
+
+  log.i('Getting comments for random topics.');
+  await measure(getRandomComments, N_GETS);
 });
 
 async function measure(sendreq, total) {
@@ -39,7 +37,7 @@ async function start(sendreq, total) {
   }, 1000);
 
   function refill(resolve, reject) {
-    while (pending < nmaxreqs) {
+    while (pending < N_MAXREQS) {
       pending++;
       sendreq().then(
         () => {
@@ -63,7 +61,15 @@ async function start(sendreq, total) {
 }
 
 async function getRandomComments() {
-  let thash = sha1(Math.random() * ntopics | 0);
+  let thash = sha1(Math.random() * N_TOPICS | 0);
+  let res = await fetch('GET', '/' + thash);
+  if (res.statusCode != 200)
+    throw new Error(res.statusCode + ' ' + res.statusMessage);
+  // log.i('Comments:', res.body);
+}
+
+async function getSameComments() {
+  let thash = sha1(0);
   let res = await fetch('GET', '/' + thash);
   if (res.statusCode != 200)
     throw new Error(res.statusCode + ' ' + res.statusMessage);
@@ -71,7 +77,7 @@ async function getRandomComments() {
 }
 
 async function addRandomComment() {
-  let thash = sha1(Math.random() * ntopics | 0);
+  let thash = sha1(Math.random() * N_TOPICS | 0);
   let ctext = Math.random().toString(16).slice(2);
   let body = [
     'Date: ' + new Date().toJSON(),
