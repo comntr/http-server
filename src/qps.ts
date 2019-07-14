@@ -46,8 +46,8 @@ class QPSMeter {
   constructor(agg = 'sum', private wsize = 3600) {
     let AV = aggregators[agg];
     if (!AV) throw new Error('Unknown aggregator: ' + agg);
-    this.values = new Array(this.wsize);
-    for (let i = 0; i < this.values.length; i++)
+    this.values = new Array(wsize);
+    for (let i = 0; i < wsize; i++)
       this.values[i] = new AV;
   }
 
@@ -56,8 +56,11 @@ class QPSMeter {
 
     if (this.tprev) {
       let n = stime - this.tprev;
-      for (let i = 0; i < n && i < this.wsize; i++)
-        this.values[(index - i) % this.wsize].reset();
+      for (let i = 0; i < n && i < this.wsize; i++) {
+        let vi = (index - i) % this.wsize;
+        if (vi < 0) vi += this.wsize;
+        this.values[vi].reset();
+      }
     }
 
     this.values[index].push(delta);
