@@ -18,9 +18,9 @@ import './handlers/room-rules';
 import './handlers/comments';
 import './handlers/root';
 
-const CERT_DIR = '/etc/letsencrypt/archive/comntr.live/';
-const CERT_KEY_FILE = 'privkey1.pem';
-const CERT_FILE = 'cert1.pem';
+const CERT_DIR = '/etc/letsencrypt/live/comntr.live/';
+const CERT_KEY_FILE = 'privkey.pem';
+const CERT_FILE = 'cert.pem';
 
 let nAllRequests = qps.register('http.all-requests', 'qps');
 let statGZipCount = qps.register('http.gzip.count', 'qps');
