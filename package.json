@@ -8,7 +8,11 @@
     "test": "npm run build; node test/func",
     "cert-renew": "~/certbot-auto certonly --standalone -d comntr.live",
     "ssh-logs": "ssh root@comntr.live 'pgrep node; cat /var/log/comntr/1.log'",
-    "ssh-push": "scp -r tools src *.json root@comntr.live:~/comntr.io"
+    "ssh-push": "scp -r tools src *.json root@comntr.live:~/comntr.io",
+    "ssh-pull": "rsync -azP root@comntr.live:/var/lib/comntr/ /var/lib/comntr",
+    "cm-recent": "find /var/lib/comntr/data/ -type f | node tools/parsec | sort -rk1",
+    "cm-byuser": "tools/byuser.sh",
+    "cm-rmuser": "tools/rmuser.sh"
   },
   "dependencies": {
     "@types/lru-cache": "^5.1.0",

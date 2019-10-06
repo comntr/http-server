@@ -1,0 +1,1 @@
+grep -lrnw '/var/lib/comntr/data/' -e "User: $1"
